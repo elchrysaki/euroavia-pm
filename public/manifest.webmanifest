@@ -1,0 +1,9 @@
+{
+  "name": "Convene",
+  "short_name": "Convene",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e8f3ff",
+  "theme_color": "#e8f3ff",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
