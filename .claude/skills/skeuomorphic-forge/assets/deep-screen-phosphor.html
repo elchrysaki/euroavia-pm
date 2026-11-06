@@ -1,0 +1,88 @@
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Écran Skeuomorphique Profond</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #121212; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; background-image: radial-gradient(circle at 50% 0%, #1a1a1a 0%, #0d0d0d 100%), url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E"); }
+    .chassis-hole {
+      position: relative;
+      padding: 5px 6px 8px 6px;
+      border-radius: 16px;
+      background: radial-gradient(ellipse 100% 100% at 50% 50%, #000 0%, #020202 70%, #080808 100%);
+      box-shadow:
+        inset 0 1px 0 #000, inset 0 2px 0 #000, inset 0 3px 1px #000,
+        inset 1px 0 0 #000, inset 2px 0 0 #000, inset -1px 0 0 #000, inset -2px 0 0 #000,
+        inset 0 4px 4px rgba(0,0,0,1), inset 0 8px 10px rgba(0,0,0,1),
+        inset 0 14px 18px rgba(0,0,0,0.95), inset 0 22px 30px rgba(0,0,0,0.85),
+        inset 0 32px 50px rgba(0,0,0,0.6),
+        inset 6px 0 8px rgba(0,0,0,1), inset 12px 0 16px rgba(0,0,0,0.9),
+        inset 20px 0 24px rgba(0,0,0,0.6),
+        inset -6px 0 8px rgba(0,0,0,1), inset -12px 0 16px rgba(0,0,0,0.9),
+        inset -20px 0 24px rgba(0,0,0,0.6),
+        inset 0 -4px 4px rgba(0,0,0,1), inset 0 -8px 10px rgba(0,0,0,1),
+        inset 0 -14px 18px rgba(0,0,0,0.95), inset 0 -22px 30px rgba(0,0,0,0.85),
+        inset 0 -32px 50px rgba(0,0,0,0.6),
+        inset 10px 10px 18px rgba(0,0,0,0.9), inset -10px 10px 18px rgba(0,0,0,0.9),
+        inset 10px -10px 18px rgba(0,0,0,0.9), inset -10px -10px 18px rgba(0,0,0,0.9),
+        0 1px 0 rgba(255,255,255,0.05), 0 2px 0 rgba(255,255,255,0.02),
+        0 -1px 0 rgba(0,0,0,0.9), 0 -2px 4px rgba(0,0,0,0.6),
+        0 6px 24px rgba(0,0,0,0.6), 0 12px 48px rgba(0,0,0,0.4);
+      border-top: 1px solid #000; border-left: 1px solid #010101;
+      border-right: 1px solid #010101; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .chassis-hole::before { content: ''; position: absolute; top: -1px; left: 12%; width: 76%; height: 1px; z-index: 25; pointer-events: none; background: radial-gradient(ellipse 55% 100% at 50% 50%, rgba(255,65,45,0.45) 0%, rgba(255,55,35,0.18) 45%, transparent 100%); box-shadow: 0 0 2px rgba(255,60,40,0.15); }
+    .chassis-hole::after { content: ''; position: absolute; inset: 0; border-radius: 16px; pointer-events: none; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 20%, transparent 45%), linear-gradient(90deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 15%, transparent 35%), linear-gradient(270deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 15%, transparent 35%), linear-gradient(0deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 20%, transparent 45%), radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(0,0,0,0.3) 80%, rgba(0,0,0,0.6) 100%); }
+    .screen-glass {
+      position: relative; width: 420px; min-height: 90px; border-radius: 10px; overflow: hidden;
+      background: linear-gradient(270deg, rgba(80,8,4,0.7) 0%, rgba(40,4,2,0.5) 40%, #020101 75%);
+      box-shadow: 0 0 0 1px rgba(255,80,50,0.8), 0 0 8px 1px rgba(255,60,40,0.25), 0 4px 12px rgba(255,40,20,0.15),
+        inset 0 18px 20px -10px rgba(0,0,0,1), inset 0 -18px 20px -10px rgba(0,0,0,1),
+        inset 24px 0 24px -12px rgba(0,0,0,1), inset 40px 0 35px -15px rgba(0,0,0,1),
+        inset 60px 0 50px -20px rgba(0,0,0,0.95), inset 80px 0 60px -25px rgba(0,0,0,0.85),
+        inset 110px 0 80px -30px rgba(0,0,0,0.6), inset -24px 0 24px -12px rgba(0,0,0,1);
+      z-index: 6;
+    }
+    .screen-glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 15; background: radial-gradient(ellipse 160% 45% at 50% -8%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 35%, transparent 50%), radial-gradient(ellipse 40% 25% at 30% 8%, rgba(255,255,255,0.1) 0%, transparent 70%), linear-gradient(125deg, transparent 20%, rgba(255,255,255,0.025) 24%, rgba(255,255,255,0.05) 28%, rgba(255,255,255,0.025) 32%, transparent 36%), radial-gradient(ellipse 60% 50% at 50% 50%, rgba(255,255,255,0.012) 0%, transparent 70%), radial-gradient(ellipse 50% 12% at 50% 98%, rgba(255,255,255,0.03) 0%, transparent 80%), linear-gradient(90deg, rgba(255,255,255,0.025) 0%, transparent 2.5%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 2px 4px rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.02); }
+    .phosphor-glow { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 7; background: radial-gradient(ellipse 50% 60% at 50% 50%, rgba(255,80,60,0.05) 0%, transparent 70%); animation: glow-breathe 4s infinite ease-in-out; }
+    @keyframes glow-breathe { 0%, 100% { opacity: 1; filter: brightness(1); } 50% { opacity: 0.8; filter: brightness(0.85); } }
+    .phosphor-content { position: relative; z-index: 8; padding: 16px 28px; display: flex; flex-direction: column; gap: 10px; }
+    .phosphor-title { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; letter-spacing: 6px; color: #ff6b5a; text-shadow: 0 0 1px rgba(255,107,90,1), 0 0 6px rgba(255,80,60,0.7), 0 0 12px rgba(255,40,20,0.3); animation: text-breathe 4s infinite ease-in-out; }
+    .phosphor-sub { font-family: 'Space Mono', monospace; font-size: 0.85rem; letter-spacing: 4px; color: rgba(255,107,90,0.7); text-shadow: 0 0 4px rgba(255,80,60,0.4); text-transform: uppercase; }
+    .phosphor-line { height: 2px; background: linear-gradient(90deg, rgba(255,80,60,0.7) 0%, rgba(255,40,20,0.1) 80%, transparent 100%); box-shadow: 0 0 6px rgba(255,60,40,0.3); }
+    .phosphor-data { font-family: 'Space Mono', monospace; font-size: 0.75rem; letter-spacing: 3px; color: rgba(255,107,90,0.5); text-shadow: 0 0 3px rgba(255,80,60,0.2); display: flex; justify-content: space-between; }
+    @keyframes text-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.9; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const App = () => {
+      return (
+        <div className="chassis-hole">
+          <div className="screen-glass">
+            <div className="phosphor-glow" />
+            <div className="phosphor-content">
+              <div className="phosphor-title">DANGER</div>
+              <div className="phosphor-line" />
+              <div className="phosphor-sub">Haute tension</div>
+              <div className="phosphor-data">
+                <span>ACCÈS</span>
+                <span>RESTREINT</span>
+                <span>SYS.3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

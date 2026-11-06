@@ -1,0 +1,1 @@
+Source: https://github.com/mmmprod/skeuomorphic-forge @ ed15ebd (v2.3.4, MIT). Installed as a project skill: SKILL.md + references/ + assets/ + scripts/ (CI, fuzzing and repo tooling omitted).

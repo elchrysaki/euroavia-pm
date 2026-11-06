@@ -1,0 +1,193 @@
+<!--
+  Tile Buttons & Divs — Up / Down / Button / Round patterns
+  Source: Codepen
+  Key techniques:
+    - Dual-shadow neumorphism: rgba(#fff,0.5) highlight + rgba(#000,0.5) shadow
+    - "Up" tiles: outer shadows (light top-left, dark bottom-right)
+    - "Down" tiles: inset shadows (dark top-left, light bottom-right)
+    - "Button" tiles: up → down transition on hover via ::before/::after shadow swap
+    - Round variants: radial-gradient at offset position for sphere illusion
+    - CSS custom property --height controls shadow depth uniformly
+    - Text label translateY on press for physical feedback
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tile Buttons & Divs</title>
+<link href="https://fonts.googleapis.com/css2?family=Alumni+Sans+Pinstripe&display=swap" rel="stylesheet">
+<style>
+:root { --height: 1; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  gap: 1rem;
+  min-height: 100vh;
+  background-color: #ddd;
+  overflow: hidden;
+  padding: 0 calc(50vw - 16rem);
+  font-size: 1.5rem;
+  color: #333;
+  line-height: 0.9;
+  font-family: "Alumni Sans Pinstripe", sans-serif;
+  text-transform: uppercase;
+  text-align: center;
+  user-select: none;
+}
+
+/* ═══ BASE TILE ═══════════════════════════════════════════════════════════ */
+.tile {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 6rem; height: 6rem;
+  border-radius: 1rem;
+}
+.tile::before,
+.tile::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 1rem;
+}
+
+/* Circle variant */
+.tile--circle { border-radius: 50%; }
+.tile--circle::before, .tile--circle::after { border-radius: 50%; }
+
+/* Padding wrapper for nested up+down */
+.padded { padding: 0.1rem; }
+
+/* ═══ UP — elevated surface ═══════════════════════════════════════════════
+   Outer shadow pair: white highlight (top-left), black shadow (bottom-right)
+   Creates the "raised from surface" illusion.
+   ═════════════════════════════════════════════════════════════════════════ */
+.up {
+  box-shadow: rgba(0,0,0,0.5) calc(0.33rem * var(--height)) calc(0.33rem * var(--height)) 0.6rem;
+}
+.up::before {
+  box-shadow: rgba(255,255,255,0.5) calc(-0.33rem * var(--height)) calc(-0.33rem * var(--height)) 0.6rem;
+}
+
+/* ═══ DOWN — recessed surface ═════════════════════════════════════════════
+   Inset shadow pair: black inset (top-left), white inset (bottom-right)
+   Creates the "pushed into surface" cavity illusion.
+   ═════════════════════════════════════════════════════════════════════════ */
+.down {
+  box-shadow: inset rgba(0,0,0,0.5) calc(0.25rem * var(--height)) calc(0.25rem * var(--height)) 0.6rem;
+}
+.down::before {
+  box-shadow: inset rgba(255,255,255,0.5) calc(-0.25rem * var(--height)) calc(-0.25rem * var(--height)) 0.6rem;
+}
+
+/* ═══ BUTTON — up-to-down transition on hover ═════════════════════════════
+   Rest: outer shadows (elevated)
+   Hover: outer shadows collapse to 0, inner shadows appear (pressed)
+   Staggered transitions create a physical "settling" feel.
+   ═════════════════════════════════════════════════════════════════════════ */
+.button {
+  cursor: pointer;
+  box-shadow: rgba(0,0,0,0.5) calc(0.33rem * var(--height)) calc(0.33rem * var(--height)) 0.6rem;
+  transition: box-shadow 0.15s 0.15s ease-in;
+}
+.button::before {
+  box-shadow: rgba(255,255,255,0.5) calc(-0.33rem * var(--height)) calc(-0.33rem * var(--height)) 0.6rem;
+  transition: box-shadow 0.15s 0.15s ease-in;
+}
+.button span {
+  transition: transform 0.3s ease-in-out;
+}
+.button > .tile {
+  box-shadow: inset rgba(0,0,0,0.5) 0 0 0;
+  transition: box-shadow 0.15s ease-in;
+}
+.button > div::before {
+  box-shadow: inset rgba(255,255,255,0.5) 0 0 0;
+  transition: box-shadow 0.15s ease-in;
+}
+
+/* Button hover — outer collapses, inner appears */
+.button:hover {
+  box-shadow: rgba(0,0,0,0.5) 0 0 0;
+  transition: box-shadow 0.15s ease-out;
+}
+.button:hover::before {
+  box-shadow: rgba(255,255,255,0.5) 0 0 0;
+  transition: box-shadow 0.15s ease-out;
+}
+.button:hover > div {
+  box-shadow: inset rgba(0,0,0,0.5) calc(0.25rem * var(--height)) calc(0.25rem * var(--height)) 0.6rem;
+  transition: box-shadow 0.15s 0.15s ease-out;
+}
+.button:hover > div::before {
+  box-shadow: inset rgba(255,255,255,0.5) calc(-0.25rem * var(--height)) calc(-0.25rem * var(--height)) 0.6rem;
+  transition: box-shadow 0.15s 0.15s ease-out;
+}
+.button:hover span {
+  transform: translateY(0.1516rem);
+}
+
+/* ═══ ROUND — sphere illusion via offset radial-gradient ═════════════════ */
+.round {
+  background: radial-gradient(circle at 40% 40%, rgba(255,255,255,0.5), transparent, rgba(0,0,0,0.5));
+  box-shadow: rgba(0,0,0,0.5) 0.33rem 0.33rem 0.6rem;
+}
+
+/* Round down — gradient light source at 75% 75% (inverted) */
+.round-down {
+  background: radial-gradient(circle at 75% 75%, rgba(255,255,255,0.5), transparent, rgba(0,0,0,0.5));
+}
+
+/* ═══ ROUND BUTTON — sphere with press animation ═════════════════════════ */
+.round-button {
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.5) 15%, transparent 30%, rgba(0,0,0,0.5));
+  background-position: -4rem -4rem;
+  background-size: 200% 200%;
+  box-shadow: rgba(0,0,0,0.5) 0.33rem 0.33rem 0.6rem;
+  transition: background 0.3s ease-in-out, box-shadow 0.15s 0.15s ease-in-out;
+}
+.round-button span {
+  transition: transform 0.3s ease-in-out;
+}
+.round-button:hover {
+  background-position: -2rem -2rem;
+  box-shadow: rgba(0,0,0,0.5) 0 0 0;
+  transition: background 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+.round-button:hover span {
+  transform: translateY(0.1516rem);
+}
+</style>
+</head>
+<body>
+
+  <!-- Flat tiles: up (elevated) and down (recessed) -->
+  <div class="tile up">Up</div>
+  <div class="tile down">Down</div>
+
+  <!-- Nested: up container with down interior -->
+  <div class="tile padded up">
+    <div class="tile down">Up &amp;<br>Down</div>
+  </div>
+
+  <!-- Button: transitions from up to down on hover -->
+  <div class="tile button">
+    <div class="tile"><span>Button</span></div>
+  </div>
+
+  <!-- Round variants -->
+  <div class="tile tile--circle round">Up</div>
+  <div class="tile tile--circle round-down">Down</div>
+  <div class="tile tile--circle round-button"><span>Button</span></div>
+
+</body>
+</html>

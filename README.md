@@ -50,6 +50,18 @@ Measured on an emulated Pixel 7 in Chrome with the CPU slowed 4× (median frame 
 | Guided-flow step change | 67 ms / 65–94% | 33 ms / 8% | 16.7 ms / 1% |
 | Backdrop-blur layers on screen | 37 | 4 | 0 |
 
+## Metal look
+
+The UI is styled with the [skeuomorphic-forge](https://github.com/mmmprod/skeuomorphic-forge) Claude skill (MIT), installed as a project skill in `.claude/skills/skeuomorphic-forge/`. Future Claude Code sessions in this repo can use it for new components.
+
+The look is cool steel adapted to the light theme:
+
+- **Surfaces:** brushed-aluminium cards, a faceplate with Torx screws on the create form, recessed wells for inputs, a keypad well for the segmented controls.
+- **Keys:** blue-anodized primary keys, aluminium secondary keys, calendar days as small keys (marked days are pressed, lit keys).
+- **Details:** chrome-coin medals, slider-channel bars, chrome title text and engraved labels.
+
+All shadow stacks are CSS variables at the end of `public/styles.css`. Smooth mode swaps in lighter stacks.
+
 ## Stack
 
 - **Cloudflare Worker** (`src/worker.js`): a small JSON API under `/api/*`

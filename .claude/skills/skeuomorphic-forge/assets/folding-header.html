@@ -1,0 +1,74 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skeuomorphic Folding Header</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #16181c; background-image: radial-gradient(circle at center, #1e2024 0%, #16181c 100%); font-family: 'Space Mono', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; color: #d1d1d1; overflow: hidden; }
+        body::after { content: " "; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none; }
+        .skeuo-outer { position: relative; z-index: 10; background: #1e1e21; border-radius: 20px; padding: 6px; box-shadow: 0 20px 40px rgba(0,0,0,0.8), inset 0 2px 3px rgba(255,255,255,0.04), inset 0 -3px 6px rgba(0,0,0,0.7); border: 1px solid #28282c; }
+        .skeuo-inner-well { background: #080809; border-radius: 16px; padding: 4px; box-shadow: inset 0 4px 8px rgba(0,0,0,0.9), inset 0 1px 2px rgba(0,0,0,0.8); position: relative; }
+        .skeuo-button { background: #232128; border-radius: 12px; padding: 18px 24px; display: flex; align-items: center; gap: 20px; cursor: pointer; user-select: none; min-width: 420px; position: relative;
+            box-shadow: inset 0 8px 14px -3px rgba(0,0,0,0.75), inset 0 4px 6px -1px rgba(0,0,0,0.6), inset 0 2px 2px rgba(0,0,0,0.5), inset 6px 0 10px -4px rgba(0,0,0,0.55), inset 3px 0 4px -1px rgba(0,0,0,0.35), inset -6px 0 10px -4px rgba(0,0,0,0.55), inset -3px 0 4px -1px rgba(0,0,0,0.35), inset 5px 5px 8px -3px rgba(0,0,0,0.4), inset -5px 5px 8px -3px rgba(0,0,0,0.4), inset 4px -3px 6px -3px rgba(0,0,0,0.15), inset -4px -3px 6px -3px rgba(0,0,0,0.15), inset 0 -3px 6px -2px rgba(255,255,255,0.035), inset 0 -1px 1px rgba(255,255,255,0.05), 0 -1px 0 rgba(255,255,255,0.05), 0 1px 0 rgba(0,0,0,0.25);
+            border-top: 1px solid #08070a; border-left: 1px solid #08070a; border-bottom: 1px solid rgba(255,255,255,0.06); border-right: 1px solid rgba(255,255,255,0.04); transition: box-shadow 0.1s ease; }
+        .skeuo-inner-well::before { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: radial-gradient(circle at 0 0, rgba(255, 139, 61, 0.85) 0%, rgba(255, 139, 61, 0.3) 6%, transparent 15%); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; z-index: 5; filter: drop-shadow(0 0 3px rgba(255,139,61,0.6)); }
+        .skeuo-inner-well::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 2px; background: radial-gradient(circle at 0 0, rgba(255, 139, 61, 0.6) 0%, rgba(255, 139, 61, 0.15) 8%, transparent 20%); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; z-index: 4; filter: blur(6px) drop-shadow(0 0 8px rgba(255, 139, 61, 0.3)); mix-blend-mode: screen; }
+        .skeuo-button:hover { background: #27252e; box-shadow: inset 0 7px 12px -3px rgba(0,0,0,0.7), inset 0 3px 5px -1px rgba(0,0,0,0.55), inset 0 2px 2px rgba(0,0,0,0.45), inset 5px 0 9px -4px rgba(0,0,0,0.5), inset 3px 0 4px -1px rgba(0,0,0,0.3), inset -5px 0 9px -4px rgba(0,0,0,0.5), inset -3px 0 4px -1px rgba(0,0,0,0.3), inset 4px 4px 7px -3px rgba(0,0,0,0.35), inset -4px 4px 7px -3px rgba(0,0,0,0.35), inset 3px -3px 5px -3px rgba(0,0,0,0.12), inset -3px -3px 5px -3px rgba(0,0,0,0.12), inset 0 -3px 6px -2px rgba(255,255,255,0.04), inset 0 -1px 1px rgba(255,255,255,0.06), 0 -1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.2); }
+        .skeuo-button:active { background: #1e1c24; box-shadow: inset 0 10px 18px -3px rgba(0,0,0,0.85), inset 0 5px 8px -1px rgba(0,0,0,0.7), inset 0 3px 3px rgba(0,0,0,0.6), inset 7px 0 12px -4px rgba(0,0,0,0.65), inset 4px 0 5px -1px rgba(0,0,0,0.4), inset -7px 0 12px -4px rgba(0,0,0,0.65), inset -4px 0 5px -1px rgba(0,0,0,0.4), inset 6px 6px 10px -3px rgba(0,0,0,0.5), inset -6px 6px 10px -3px rgba(0,0,0,0.5), inset 5px -4px 8px -3px rgba(0,0,0,0.2), inset -5px -4px 8px -3px rgba(0,0,0,0.2), inset 0 -2px 4px -1px rgba(255,255,255,0.02), inset 0 -1px 1px rgba(255,255,255,0.03), 0 -1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(0,0,0,0.35); }
+        .glow-icon { color: #ff8b3d; filter: drop-shadow(0 0 8px rgba(255, 139, 61, 0.8)) drop-shadow(0 0 2px rgba(255, 139, 61, 1)); display: flex; flex-direction: column; gap: 4.5px; }
+        .glow-line { width: 24px; height: 3px; background-color: currentColor; border-radius: 2px; }
+        .input-text { font-size: 1.1rem; letter-spacing: 0.5em; color: #88888f; font-weight: 700; margin-left: 12px; opacity: 0.9; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .chevron { color: #d1d1d6; filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.4)); margin-left: auto; transition: transform 0.3s ease; opacity: 0.9; }
+        .chevron.rotated { transform: rotate(180deg); }
+        .folding-content { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease; opacity: 0; }
+        .folding-content.open { max-height: 500px; opacity: 1; padding-top: 16px; }
+        .input-field { background: #0a0a0b; border: 1px solid #222226; border-radius: 12px; padding: 12px 16px; width: 100%; color: #eee; margin-bottom: 12px; outline: none; box-shadow: inset 0 4px 6px rgba(0,0,0,0.6); font-family: 'Space Mono', monospace; font-size: 0.9rem; }
+        .input-field:focus { border-color: #ff8c42; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), 0 0 8px rgba(255, 140, 66, 0.2); }
+        .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.15em; color: #4a4a4e; margin-bottom: 6px; margin-left: 4px; display: block; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState } = React;
+        const App = () => {
+            const [isOpen, setIsOpen] = useState(false);
+            return (
+                <div className="flex flex-col items-center justify-center p-4">
+                    <div className="skeuo-outer">
+                        <div className="skeuo-inner-well">
+                            <div className="skeuo-button" onClick={() => setIsOpen(!isOpen)}>
+                                <div className="glow-icon">
+                                    <div className="glow-line"></div>
+                                    <div className="glow-line"></div>
+                                    <div className="glow-line"></div>
+                                </div>
+                                <span className="input-text">INPUT</span>
+                                <div className={`chevron ${isOpen ? 'rotated' : ''}`}>
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div className={`folding-content ${isOpen ? 'open' : ''}`}>
+                                <div className="px-4 pb-4">
+                                    <div><label className="label">Access Key</label><input type="password" placeholder="••••••••" className="input-field" /></div>
+                                    <div><label className="label">Sequence ID</label><input type="text" placeholder="G-1029-X" className="input-field" /></div>
+                                    <button className="w-full bg-[#ff8c42] text-[#121214] font-bold py-2 rounded-lg mt-2 hover:bg-[#ffa066] transition-colors shadow-lg active:translate-y-0.5">EXECUTE</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

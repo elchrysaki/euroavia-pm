@@ -1,0 +1,124 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skeuomorphic Switch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #1a1d21; }
+
+        .switch-track {
+            background: #0a0a0a;
+            box-shadow:
+                inset 0 15px 25px rgba(0, 0, 0, 0.95),
+                inset 0 -3px 6px rgba(255, 255, 255, 0.05),
+                0 2px 0 rgba(255, 255, 255, 0.08),
+                0 -2px 0 rgba(0, 0, 0, 0.5);
+            background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 8px 8px;
+            width: 240px; height: 110px;
+            border-radius: 55px;
+            position: relative; cursor: pointer; overflow: hidden;
+            border: 3px solid #000;
+            transition: background 0.4s ease;
+        }
+        .switch-track.on {
+            background-color: #e65100;
+            background-image: radial-gradient(rgba(255,255,255,0.2) 1.5px, transparent 1.5px);
+            box-shadow:
+                inset 0 15px 30px rgba(0, 0, 0, 0.6),
+                inset 0 -3px 10px rgba(255, 100, 0, 0.4),
+                0 0 20px rgba(230, 81, 0, 0.2);
+        }
+
+        .switch-handle {
+            background: linear-gradient(145deg, #5a5f64 0%, #2c3136 45%, #1a1d21 100%);
+            box-shadow:
+                0 15px 35px rgba(0, 0, 0, 0.8),
+                0 5px 15px rgba(0, 0, 0, 0.5),
+                inset 0 3px 2px rgba(255, 255, 255, 0.25),
+                inset 0 -1px 2px rgba(255, 255, 255, 0.1),
+                inset 0 -6px 12px rgba(0, 0, 0, 0.6);
+            width: 130px; height: 100px;
+            border-radius: 50px;
+            position: absolute; top: 2px; left: 3px;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            transition: transform 0.45s cubic-bezier(0.23, 1, 0.32, 1);
+            border: 1px solid rgba(0, 0, 0, 0.4);
+        }
+        .switch-handle::before {
+            content: '';
+            position: absolute; top: 4%; left: 12%; width: 76%; height: 35%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.2) 0%, transparent 100%);
+            border-radius: 40px; pointer-events: none;
+        }
+
+        .grip-line {
+            width: 4px; height: 40px;
+            background: #111; border-radius: 2px;
+            box-shadow: 1px 1px 1px rgba(255,255,255,0.1), inset 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .indicator-left {
+            width: 32px; height: 32px;
+            border: 4px solid #050505; border-radius: 50%;
+            background: #ff4500;
+            box-shadow:
+                inset 0 2px 8px rgba(0,0,0,0.9),
+                0 0 15px rgba(255,69,0,0.5),
+                0 1px 0 rgba(255,255,255,0.1);
+            transition: all 0.4s ease;
+        }
+        .indicator-left.off {
+            background: #0f0f0f;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,1);
+            border-color: #050505;
+        }
+
+        .indicator-right {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: #0f0f0f;
+            border: 4px solid #050505;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,1);
+            transition: all 0.4s ease;
+        }
+        .indicator-right.on {
+            background: #fff;
+            border-color: #fff;
+            box-shadow:
+                0 0 35px 8px rgba(255, 255, 255, 0.5),
+                0 0 15px 3px rgba(255, 255, 255, 0.8),
+                inset 0 0 8px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState } = React;
+        const SkeuomorphicSwitch = () => {
+            const [isOn, setIsOn] = useState(true);
+            return (
+                <div className="flex items-center space-x-6 select-none scale-125">
+                    <div className={`indicator-left ${!isOn ? 'off' : ''}`}></div>
+                    <div onClick={() => setIsOn(!isOn)} className={`switch-track ${isOn ? 'on' : ''}`}>
+                        <div className="switch-handle" style={{ transform: isOn ? 'translateX(101px)' : 'translateX(0)' }}>
+                            <div className="grip-line"></div>
+                            <div className="grip-line"></div>
+                            <div className="grip-line"></div>
+                        </div>
+                    </div>
+                    <div className={`indicator-right ${isOn ? 'on' : ''}`}></div>
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<div className="p-8"><SkeuomorphicSwitch /></div>);
+    </script>
+</body>
+</html>

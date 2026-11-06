@@ -1,0 +1,93 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Autochord UI</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; background: #121417; font-family: 'Orbitron', sans-serif; }
+    .backplate { padding: 5px; border-radius: 34px; background: linear-gradient(145deg, #2e3238, #1e2226); box-shadow: 6px 6px 22px rgba(0,0,0,0.6), -3px -3px 10px rgba(50,55,65,0.05), 0 14px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.4); position: relative; }
+    .panel { position: relative; background: linear-gradient(180deg, #1a1d20 0%, #24282c 10%, #16191c 50%, #0d0f11 100%); border-radius: 30px; border: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.6); overflow: hidden; }
+    .dots { position: absolute; inset: 0; border-radius: 30px; pointer-events: none; z-index: 1; background-image: radial-gradient(rgba(0,0,0,0.6) 1px, transparent 1px); background-size: 6px 6px; opacity: 0.4; }
+    .noise { position: absolute; inset: 0; border-radius: 30px; pointer-events: none; z-index: 2; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); mix-blend-mode: overlay; opacity: 0.35; }
+    .edge-vignette { position: absolute; inset: 0; border-radius: 30px; pointer-events: none; z-index: 4; box-shadow: inset 0 12px 20px -4px rgba(0,0,0,0.6), inset 0 6px 8px -2px rgba(0,0,0,0.4), inset 0 -10px 18px -4px rgba(0,0,0,0.5), inset 0 -5px 6px -2px rgba(0,0,0,0.3), inset 12px 0 18px -4px rgba(0,0,0,0.45), inset 5px 0 6px -2px rgba(0,0,0,0.25), inset -12px 0 18px -4px rgba(0,0,0,0.45), inset -5px 0 6px -2px rgba(0,0,0,0.25), inset 8px 8px 14px -4px rgba(0,0,0,0.3), inset -8px 8px 14px -4px rgba(0,0,0,0.3), inset 8px -8px 14px -4px rgba(0,0,0,0.3), inset -8px -8px 14px -4px rgba(0,0,0,0.3); }
+    .glass-reflection { position: absolute; inset: 0; border-radius: 30px; background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 40%, rgba(0,0,0,0.1) 100%); pointer-events: none; z-index: 3; }
+    .panel-inner { position: relative; z-index: 5; background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(36,40,44,0.4) 0%, transparent 70%); }
+    .icon-well { background: #020304; border-radius: 50%; padding: 4px; box-shadow: inset 0 6px 14px rgba(0,0,0,0.9), inset 0 2px 4px rgba(0,0,0,1), inset 3px 0 8px rgba(0,0,0,0.5), inset -3px 0 8px rgba(0,0,0,0.5), inset 0 -3px 6px rgba(255,255,255,0.015), 0 1px 0 rgba(255,255,255,0.06), 0 2px 0 rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.4); border-top: 1px solid #000; border-left: 1px solid rgba(0,0,0,0.8); border-bottom: 1px solid rgba(50,55,65,0.15); border-right: 1px solid rgba(40,44,50,0.1); }
+    .icon-mid-ring { background: linear-gradient(180deg, #0a0b0d 0%, #141618 50%, #0a0b0d 100%); border-radius: 50%; padding: 2px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.7), inset 0 -1px 2px rgba(255,255,255,0.02), 0 1px 0 rgba(255,255,255,0.03); border-top: 1px solid #050607; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .icon-dome { position: relative; width: 68px; height: 68px; border-radius: 50%; background: radial-gradient(circle at 50% 60%, #1a0808 0%, #0c0305 50%, #050102 100%); box-shadow: inset 0 0 25px rgba(0,0,0,0.7), inset 0 4px 8px rgba(0,0,0,0.6), inset 0 8px 16px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(255,26,26,0.05), inset 0 -6px 14px rgba(255,26,26,0.03), inset 4px 0 8px rgba(0,0,0,0.4), inset -4px 0 8px rgba(0,0,0,0.4), 0 0 8px rgba(255,26,26,0.06); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .icon-dome::before { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 10; background: radial-gradient(ellipse 30% 22% at 45% 22%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 50%, transparent 100%), radial-gradient(ellipse 55% 40% at 48% 28%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.01) 60%, transparent 100%), radial-gradient(ellipse 25% 18% at 65% 72%, rgba(255,255,255,0.035) 0%, transparent 100%), radial-gradient(ellipse 12% 50% at 12% 45%, rgba(255,255,255,0.03) 0%, transparent 100%), radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.25) 70%, rgba(0,0,0,0.5) 100%); }
+    .icon-dome::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 5; background: radial-gradient(circle at 50% 55%, rgba(255,26,26,0.14) 0%, rgba(255,26,26,0.05) 35%, transparent 65%), radial-gradient(circle at 50% 70%, rgba(255,26,26,0.06) 0%, transparent 50%); animation: dome-pulse 3s infinite ease-in-out; }
+    @keyframes dome-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+    .dome-ring { position: absolute; inset: -1px; border-radius: 50%; pointer-events: none; z-index: 11; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), inset 0 2px 2px rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.6), inset 0 -2px 3px rgba(0,0,0,0.3), inset 1px 0 0 rgba(255,255,255,0.03), inset -1px 0 0 rgba(255,255,255,0.02), 0 2px 4px rgba(0,0,0,0.4), 0 1px 1px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.04); }
+    .glow-text { color: #ff1a1a; text-shadow: 0 0 6px rgba(255,0,0,0.9), 0 0 18px rgba(255,0,0,0.5), 0 0 40px rgba(255,0,0,0.15), 1px 1px 3px rgba(0,0,0,1); letter-spacing: 0.08em; }
+    .sub-text { color: rgba(255,26,26,0.6); text-shadow: 0 0 8px rgba(255,0,0,0.2); letter-spacing: 0.15em; }
+    .bottom-groove { height: 2px; background: #080a0c; box-shadow: inset 0 1px 2px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03); }
+    .bottom-bar { background: linear-gradient(180deg, #1e2226 0%, #12151a 40%, #0a0c0e 100%); border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
+    .red-projection { position: absolute; z-index: 4; pointer-events: none; width: 500px; height: 200px; left: 50%; top: 40%; transform: translate(-50%, -50%); background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(255,26,26,0.04) 0%, rgba(255,26,26,0.015) 40%, transparent 70%); animation: proj-pulse 3s infinite ease-in-out; }
+    @keyframes proj-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .led-red { width: 6px; height: 6px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ff6666, #ff1a1a 60%, #cc0000 100%); box-shadow: 0 0 2px #ff1a1a, 0 0 6px rgba(255,26,26,0.6), 0 0 14px rgba(255,26,26,0.3), 0 0 22px rgba(255,26,26,0.1), inset 0 1px 1px rgba(255,255,255,0.3); animation: led-pulse 1.5s infinite ease-in-out; }
+    @keyframes led-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .v-separator { width: 2px; align-self: stretch; background: linear-gradient(180deg, transparent, #080a0c 20%, #080a0c 80%, transparent); box-shadow: 1px 0 0 rgba(255,255,255,0.02), -1px 0 0 rgba(0,0,0,0.5); margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const App = () => (
+      <div className="min-h-screen w-full flex items-center justify-center" style={{ background: '#121417' }}>
+        <div className="backplate">
+          <div className="panel" style={{ width: 920, height: 220 }}>
+            <div className="dots"></div>
+            <div className="noise"></div>
+            <div className="glass-reflection"></div>
+            <div className="edge-vignette"></div>
+            <div className="red-projection"></div>
+            <div className="panel-inner flex items-center h-[165px] px-10 gap-8">
+              <div className="icon-well flex-shrink-0">
+                <div className="icon-mid-ring">
+                  <div className="icon-dome">
+                    <div className="dome-ring"></div>
+                    <i className="fas fa-volume-up text-[#ff1a1a] text-2xl" style={{ zIndex: 8, position: 'relative', filter: 'drop-shadow(0 0 8px rgba(255,26,26,0.5)) drop-shadow(0 0 2px rgba(255,26,26,0.8))' }}></i>
+                  </div>
+                </div>
+              </div>
+              <div className="v-separator"></div>
+              <div className="flex flex-col gap-1">
+                <div className="glow-text text-[28px] font-bold leading-tight">BASS ROLLOFF NON CORRIGÉ</div>
+                <div className="sub-text text-[12px] font-medium uppercase italic">Retourner à l'étape 4-1 pour appliquer la correction</div>
+              </div>
+              <div className="ml-auto flex flex-col gap-3 items-end flex-shrink-0" style={{ position: 'relative', zIndex: 10 }}>
+                {[
+                  { label: 'PHASE', value: 'ERROR', color: '#ff1a1a' },
+                  { label: 'SUB', value: 'ROLLOFF', color: '#ff1a1a' },
+                  { label: 'CORR.', value: 'PENDING', color: '#f59e0b' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-3" style={{ padding: '4px 10px 4px 8px', borderRadius: 8, background: '#0a0b0d', boxShadow: 'inset 2px 2px 5px #050607, inset -2px -2px 5px #181b20, 0 1px 0 rgba(255,255,255,0.02)' }}>
+                    <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.15em', color: '#3a4050', fontFamily: 'Orbitron' }}>{item.label}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: item.color, fontFamily: 'Orbitron', textShadow: `0 0 6px ${item.color}44` }}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bottom-groove"></div>
+            <div className="bottom-bar" style={{ height: 53 }}>
+              <div className="flex items-center h-full px-10 gap-4">
+                <div className="led-red"></div>
+                <span style={{ color: 'rgba(255,26,26,0.35)', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', fontFamily: 'Orbitron' }}>System Alert / Phase Error</span>
+                <span className="ml-auto" style={{ color: '#1e2228', fontSize: 8, letterSpacing: '0.15em', fontFamily: 'Orbitron' }}>FW v3.2.1</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital dB Display</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            background-color: #1a1a1a;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; margin: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .lcd-recessed {
+            background: #181818;
+            padding: 10px;
+            border-radius: 16px;
+            box-shadow:
+                inset 3px 3px 6px rgba(0,0,0,0.9),
+                inset -1px -1px 3px rgba(255,255,255,0.05),
+                0 1px 2px rgba(255,255,255,0.03);
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid #111;
+        }
+
+        .lcd-screen-inner {
+            background: linear-gradient(160deg, #4e5450 0%, #444a46 40%, #3e4440 100%);
+            width: 260px; height: 100px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+            box-shadow:
+                inset 6px 6px 16px rgba(0,0,0,0.85),
+                inset -2px -2px 8px rgba(255,255,255,0.07),
+                inset 0 0 30px rgba(0,0,0,0.40);
+        }
+
+        .lcd-inner-layout {
+            display: flex; align-items: center; justify-content: space-between;
+            width: 220px; position: relative; z-index: 2;
+        }
+
+        .lcd-number {
+            font-family: 'Digital-7 Mono', sans-serif;
+            font-size: 78px; letter-spacing: -3px;
+            color: rgba(12, 14, 12, 0.92);
+            line-height: 1;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.07), 0 2px 5px rgba(0,0,0,0.42);
+            flex: 1; text-align: center;
+        }
+
+        .db-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 18px; font-weight: 700;
+            letter-spacing: 0.20em; text-transform: uppercase;
+            color: rgba(12, 14, 12, 0.52);
+            text-shadow: 0 1px 0 rgba(255,255,255,0.05);
+            align-self: center; padding-left: 10px; flex-shrink: 0;
+        }
+
+        /* Scanlines */
+        .lcd-screen-inner::after {
+            content: ""; position: absolute; inset: 0;
+            background-image: repeating-linear-gradient(0deg,
+                rgba(0,0,0,0.06) 0px, rgba(0,0,0,0.06) 1px,
+                transparent 1px, transparent 3px);
+            pointer-events: none; z-index: 3;
+        }
+
+        /* Glass reflection */
+        .lcd-screen-inner::before {
+            content: ""; position: absolute;
+            top: 0; left: 0; right: 0; height: 45%;
+            background: linear-gradient(to bottom,
+                rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 60%, transparent 100%);
+            pointer-events: none; z-index: 4;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const App = () => {
+            return (
+                <div className="flex flex-col items-center gap-8">
+                    <div className="lcd-recessed">
+                        <div className="lcd-screen-inner">
+                            <div className="lcd-inner-layout">
+                                <span className="lcd-number">-2.6</span>
+                                <span className="db-label">dB</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

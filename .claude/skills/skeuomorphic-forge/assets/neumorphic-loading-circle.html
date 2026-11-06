@@ -1,0 +1,137 @@
+<!--
+  Neumorphic Loading Circle
+  Source: Codepen
+  Key techniques:
+    - Neumorphic dual-shadow (dark bottom-right + subtle light top-left)
+    - Conic-gradient progress ring updated via JS (0-100%)
+    - Inner counter-spin animation cancels rotation for stable text
+    - Inset neumorphic well for the center display area
+    - Percentage counter with large sans-serif digits (Quicksand)
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neumorphic Loading Circle</title>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300&display=swap" rel="stylesheet">
+<style>
+html, body {
+  width: 100%; height: 100%;
+  padding: 0; margin: 0;
+}
+
+body {
+  background: #1D1E22;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Quicksand', sans-serif;
+  user-select: none;
+}
+
+/* ═══ OUTER CARD — neumorphic container ═══════════════════════════════════
+   Dual-shadow: dark cast (bottom-right) + subtle light catch (top-left).
+   Creates the "raised from dark surface" illusion.
+   ═════════════════════════════════════════════════════════════════════════ */
+.loading-box {
+  position: relative;
+  width: 300px; height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #F0F8FF;
+  border-radius: 12px;
+  box-shadow:
+    4px 4px 16px rgba(0, 0, 0, 0.5),
+    -4px -4px 16px rgba(255, 255, 255, 0.05);
+}
+
+/* ═══ TITLE — silkscreen uppercase ════════════════════════════════════════ */
+.loading-title {
+  font-size: 1.5em;
+  transform: translateY(-12px);
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  font-weight: 300;
+}
+
+/* ═══ PROGRESS RING — conic-gradient spinner ══════════════════════════════
+   The conic-gradient is updated via JS to show progress 0→100%.
+   Gradient transitions from purple-blue (#6F7BF7) to cyan (#9BF8F4).
+   The remaining arc is dark (#101012).
+   Outer neumorphic shadow gives the ring physical depth.
+   ═════════════════════════════════════════════════════════════════════════ */
+.loading-circle {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 180px; height: 180px;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(111, 123, 247, 1) 0%,
+    rgba(155, 248, 244, 1) 0%,
+    #101012 0%
+  );
+  border-radius: 100px;
+  box-shadow:
+    4px 4px 16px rgba(0, 0, 0, 0.75),
+    -4px -4px 16px rgba(255, 255, 255, 0.1);
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ═══ CENTER WELL — inset neumorphic display ══════════════════════════════
+   Counter-rotates to cancel the spin animation on the percentage text.
+   Inset shadows create the "sunken into the ring" cavity effect.
+   ═════════════════════════════════════════════════════════════════════════ */
+.loading-count {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 174px; height: 174px;
+  border-radius: 100px;
+  background: #1D1E22;
+  box-shadow:
+    4px 4px 16px rgba(0, 0, 0, 0.75) inset,
+    -4px -4px 16px rgba(255, 255, 255, 0.1) inset;
+  animation: spin 1s infinite linear reverse;
+}
+
+.loading-count #loadingNumber {
+  font-size: 4em;
+}
+</style>
+</head>
+<body>
+
+<div class="loading-box">
+  <p class="loading-title">Loading</p>
+  <div class="loading-circle">
+    <p class="loading-count"><span id="loadingNumber">0</span>%</p>
+  </div>
+</div>
+
+<script>
+const loadingNumber = document.querySelector('#loadingNumber');
+const loadingCircle = document.querySelector('.loading-circle');
+let load = 0;
+
+setInterval(updateLoader, 150);
+
+function updateLoader() {
+  load += (load < 100);
+  loadingNumber.innerHTML = load;
+  loadingCircle.style.background =
+    'conic-gradient(from 0deg at 50% 50%, rgba(111, 123, 247, 1) 0%, rgba(155, 248, 244, 1) ' +
+    load + '%, #101012 ' + load + '%)';
+}
+</script>
+
+</body>
+</html>

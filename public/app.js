@@ -397,10 +397,11 @@ function renderHome() {
       </div>
 
       <form class="fade-in d2" id="createForm" autocomplete="off">
-        <div class="card pad">
+        <div class="card pad faceplate">
+          <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
           <div class="mini-heat" aria-hidden="true">${heat}</div>
           <div class="section-header" style="margin-top:22px">New event</div>
-          <div class="card group" style="box-shadow:none;background:var(--glass-strong)">
+          <div class="group well">
             <div class="row"><label for="title">Name</label><input id="title" name="title" maxlength="80" placeholder="Summer trip 2027" required /></div>
             <div class="row"><label for="desc">Notes</label><textarea id="desc" name="description" maxlength="400" placeholder="Optional — what's the plan?"></textarea></div>
           </div>
@@ -413,7 +414,7 @@ function renderHome() {
             <button type="button" data-value="custom" aria-pressed="false">Custom</button>
           </div>
           <div class="range-custom" id="rangeCustom" hidden>
-            <div class="card group" style="box-shadow:none;background:var(--glass-strong);margin-top:10px">
+            <div class="group well" style="margin-top:10px">
               <div class="row"><label for="startDate">Starts</label><input type="date" id="startDate" min="${today}" value="${today}" /></div>
               <div class="row"><label for="endDate">Ends</label><input type="date" id="endDate" min="${today}" value="${addMonths(today, 6)}" /></div>
             </div>

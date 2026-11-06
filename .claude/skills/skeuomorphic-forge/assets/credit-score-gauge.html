@@ -1,0 +1,472 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credit Score Gauge v5</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: radial-gradient(ellipse at 50% 30%, #22222e 0%, #09090f 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chassis {
+      position: relative;
+      padding: 26px 26px 14px;
+      border-radius: 24px;
+      overflow: visible;
+      background:
+        linear-gradient(145deg,
+          transparent 0%, transparent 26%,
+          rgba(255,255,255,0.04) 28%, rgba(255,255,255,0.14) 31%,
+          rgba(255,255,255,0.18) 33%, rgba(255,255,255,0.10) 35%,
+          rgba(255,255,255,0.02) 37%, transparent 39%, transparent 100%),
+        linear-gradient(145deg,
+          transparent 0%, transparent 62%,
+          rgba(255,255,255,0.02) 66%, rgba(255,255,255,0.04) 70%,
+          rgba(255,255,255,0.02) 74%, transparent 78%, transparent 100%),
+        repeating-linear-gradient(90deg,
+          rgba(255,255,255,0.000) 0px, rgba(255,255,255,0.032) 0.5px,
+          rgba(255,255,255,0.000) 1px, rgba(0,0,0,0.018) 1.5px,
+          rgba(0,0,0,0.000) 2px, rgba(255,255,255,0.016) 2.5px,
+          rgba(255,255,255,0.000) 3px),
+        repeating-linear-gradient(90deg,
+          rgba(255,255,255,0.012) 0px, transparent 0.6px, transparent 1px),
+        radial-gradient(ellipse 55% 42% at 0% 0%,
+          rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 40%, transparent 100%),
+        radial-gradient(ellipse 30% 25% at 100% 0%,
+          rgba(255,255,255,0.05) 0%, transparent 100%),
+        linear-gradient(145deg,
+          #545462 0%, #3e3e4c 9%, #2e2e3a 22%,
+          #222230 40%, #16161e 60%, #0e0e16 80%, #08080e 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.42),
+        inset 1px 0 0 rgba(255,255,255,0.22),
+        inset -1px 0 0 rgba(0,0,0,0.86),
+        inset 0 -1px 0 rgba(0,0,0,0.92),
+        inset 0 4px 6px rgba(255,255,255,0.14),
+        inset 4px 0 7px rgba(255,255,255,0.08),
+        inset 10px 10px 36px rgba(255,255,255,0.075),
+        inset -12px -12px 36px rgba(0,0,0,0.82),
+        inset 0 18px 48px rgba(0,0,0,0.38),
+        inset 0 0 100px rgba(0,0,0,0.50),
+        0 1px 0 rgba(0,0,0,1),
+        0 4px 8px rgba(0,0,0,0.96),
+        0 12px 26px rgba(0,0,0,0.84),
+        0 30px 60px rgba(0,0,0,0.66),
+        0 60px 110px 8px rgba(0,0,0,0.46),
+        0 100px 160px -8px rgba(0,0,0,0.30);
+    }
+
+    .chassis::before {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: 24px;
+      pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 20% at 50% 0%,
+          rgba(255,255,255,0.08) 0%, transparent 100%),
+        radial-gradient(ellipse 80% 15% at 50% 100%,
+          rgba(255,255,255,0.04) 0%, transparent 100%),
+        radial-gradient(ellipse 18% 60% at 0% 50%,
+          rgba(255,255,255,0.07) 0%, transparent 100%),
+        radial-gradient(ellipse 12% 50% at 100% 50%,
+          rgba(255,255,255,0.03) 0%, transparent 100%),
+        radial-gradient(ellipse 50% 40% at 100% 100%,
+          rgba(0,0,0,0.22) 0%, transparent 100%);
+      transform: rotate(55deg);
+      transform-origin: center;
+      mix-blend-mode: overlay;
+      opacity: 0.55;
+    }
+
+    .chassis::after {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: 24px;
+      pointer-events: none; z-index: 0;
+      background:
+        linear-gradient(145deg,
+          rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 1.5px,
+          transparent 3px, transparent 100%),
+        linear-gradient(145deg,
+          transparent 0%, transparent 88%,
+          rgba(0,0,0,0.20) 93%, rgba(0,0,0,0.30) 100%);
+    }
+
+    .gauge-well {
+      position: relative;
+      border-radius: 14px;
+      background: #0a0a14;
+      box-shadow:
+        inset 0 2px 3px rgba(0,0,0,1),
+        inset 0 7px 20px rgba(0,0,0,0.98),
+        inset 0 22px 52px rgba(0,0,0,0.82),
+        inset 5px 0 14px rgba(0,0,0,0.86),
+        inset -5px 0 14px rgba(0,0,0,0.86),
+        inset 0 -3px 10px rgba(0,0,0,0.54),
+        inset 0 0 110px rgba(0,0,0,0.64),
+        0 1px 0 rgba(255,255,255,0.08),
+        0 0 0 1px rgba(0,0,0,0.95);
+    }
+
+    .screw {
+      position: absolute;
+      width: 30px; height: 30px;
+      overflow: visible;
+      pointer-events: none;
+      z-index: 30;
+    }
+
+    .controls {
+      padding: 10px 2px 2px;
+    }
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      color: rgba(150,150,180,0.28);
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      padding: 0 4px; margin-bottom: 5px;
+    }
+    input[type="range"] {
+      width: 100%; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      height: 3px; border-radius: 2px;
+      background: rgba(255,255,255,0.08); outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--tc, #a0ff10);
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.65),
+                  0 0 6px var(--tc,#a0ff10),
+                  0 2px 4px rgba(0,0,0,0.55);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useMemo } = React;
+
+  const CX = 250, CY = 254;
+  const p2c = (r, d) => {
+    const a = (d - 90) * Math.PI / 180;
+    return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+  };
+  const arc = (r, s, e) => {
+    const [sx,sy]=p2c(r,s), [ex,ey]=p2c(r,e);
+    return `M ${sx} ${sy} A ${r} ${r} 0 ${(e-s)>180?1:0} 1 ${ex} ${ey}`;
+  };
+  const ring = (r1,r2,s,e) => {
+    const [osx,osy]=p2c(r2,s),[oex,oey]=p2c(r2,e);
+    const [isx,isy]=p2c(r1,s),[iex,iey]=p2c(r1,e);
+    const lg=(e-s)>180?1:0;
+    return `M${isx} ${isy} L${osx} ${osy} A${r2} ${r2} 0 ${lg} 1 ${oex} ${oey} L${iex} ${iey} A${r1} ${r1} 0 ${lg} 0 ${isx} ${isy}Z`;
+  };
+
+  const SEGS = [
+    { id:'poor', s:-90, e:-45, label:'POOR',
+      bright:'#ff6878', lit:'#ff2244', mid:'#d84060',
+      dim:'#280a0e', dimI:'#130406', glow:'#ff2244' },
+    { id:'fair', s:-45, e:0, label:'FAIR',
+      bright:'#f8de5c', lit:'#f0c400', mid:'#d8b030',
+      dim:'#241e06', dimI:'#120f02', glow:'#f0c400' },
+    { id:'good', s:0, e:45, label:'GOOD',
+      bright:'#c4ec40', lit:'#a8e010', mid:'#8cc420',
+      dim:'#141d04', dimI:'#0b1002', glow:'#a8e010' },
+    { id:'excellent', s:45, e:90, label:'EXCELLENT',
+      bright:'#62e244', lit:'#40c820', mid:'#36a81c',
+      dim:'#0c1d07', dimI:'#060e03', glow:'#40c820' },
+  ];
+
+  const Screw = ({ style }) => {
+    const cx = 15, cy = 15;
+    const id = `s${style.top||0}${style.left||0}${style.right||0}${style.bottom||0}`;
+    return (
+      <svg className="screw" style={style} viewBox="0 0 30 30">
+        <defs>
+          <radialGradient id={`sg_${id}`} cx="30%" cy="26%" r="68%">
+            <stop offset="0%" stopColor="#9090a0"/>
+            <stop offset="28%" stopColor="#606070"/>
+            <stop offset="62%" stopColor="#3c3c4e"/>
+            <stop offset="100%" stopColor="#1c1c2e"/>
+          </radialGradient>
+          <filter id={`sf_${id}`} x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="3" dy="4.5" stdDeviation="3.5" floodColor="rgba(0,0,0,0.88)"/>
+            <feDropShadow dx="1.5" dy="2" stdDeviation="1.5" floodColor="rgba(0,0,0,0.95)"/>
+          </filter>
+        </defs>
+        <g filter={`url(#sf_${id})`}>
+          <circle cx={cx} cy={cy} r={13} fill="rgba(0,0,0,0.48)" style={{filter:'blur(4px)'}}/>
+          <circle cx={cx} cy={cy} r={9.5} fill="#0b0b18"/>
+          <circle cx={cx+1.5} cy={cy+2} r={8.8} fill="rgba(0,0,0,0.44)"/>
+          <circle cx={cx} cy={cy} r={8.2} fill={`url(#sg_${id})`}/>
+          <path d={`M${cx+5.7} ${cy+5.7} A8.2 8.2 0 1 1 ${cx+5.7} ${cy-5.7}`}
+            fill="none" stroke="rgba(0,0,0,0.58)" strokeWidth="1.5"/>
+          <path d={`M${cx-5.7} ${cy-5.7} A8.2 8.2 0 0 1 ${cx+5.7} ${cy-5.7}`}
+            fill="none" stroke="rgba(255,255,255,0.20)" strokeWidth="0.9"/>
+          <rect x={cx-0.95} y={cy-6} width={1.9} height={12} rx="0.7" fill="rgba(0,0,0,0.66)"/>
+          <rect x={cx-6} y={cy-0.95} width={12} height={1.9} rx="0.7" fill="rgba(0,0,0,0.66)"/>
+          <rect x={cx-0.33} y={cy-5.8} width={0.66} height={5.2} rx="0.3" fill="rgba(255,255,255,0.11)"/>
+          <ellipse cx={cx-2.8} cy={cy-3.2} rx={3.5} ry={2.2}
+            fill="rgba(255,255,255,0.32)" transform={`rotate(-38,${cx-2.8},${cy-3.2})`}/>
+          <circle cx={cx-3.8} cy={cy-3.8} r={1.3} fill="rgba(255,255,255,0.58)"/>
+          <circle cx={cx-4.5} cy={cy-4.5} r={0.6} fill="rgba(255,255,255,0.85)"/>
+        </g>
+      </svg>
+    );
+  };
+
+  const Gauge = () => {
+    const [score, setScore] = useState(682);
+    const angle = useMemo(()=>((score-300)/550)*180-90,[score]);
+    const seg = useMemo(()=>SEGS.find(s=>angle>=s.s&&angle<s.e)||SEGS[3],[angle]);
+    const passedSegs = SEGS.filter(s => s.e <= angle);
+    const coneS = Math.max(angle-18, seg.s);
+    const coneE = Math.min(angle+8, seg.e);
+    const focalS = Math.max(angle-5, seg.s);
+    const focalE = Math.min(angle+2, seg.e);
+
+    return (
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+        <div className="chassis">
+          <Screw style={{top:4,left:4}}/>
+          <Screw style={{top:4,right:4}}/>
+          <Screw style={{bottom:16,left:4}}/>
+          <Screw style={{bottom:16,right:4}}/>
+          <div className="gauge-well">
+            <svg width="500" height="292" viewBox="0 0 500 292" overflow="visible" style={{display:'block'}}>
+              <defs>
+                <radialGradient id="bgG" cx="50%" cy="78%" r="64%">
+                  <stop offset="0%" stopColor="#2c2c3e"/>
+                  <stop offset="38%" stopColor="#1e1e2c"/>
+                  <stop offset="100%" stopColor="#060610"/>
+                </radialGradient>
+                <linearGradient id="tD" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(0,0,0,0.88)"/>
+                  <stop offset="22%" stopColor="rgba(0,0,0,0.46)"/>
+                  <stop offset="48%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.06)"/>
+                </linearGradient>
+                <linearGradient id="sV" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="rgba(0,0,0,0.60)"/>
+                  <stop offset="14%" stopColor="rgba(0,0,0,0.22)"/>
+                  <stop offset="40%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="60%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="86%" stopColor="rgba(0,0,0,0.22)"/>
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.60)"/>
+                </linearGradient>
+                <radialGradient id="aO" gradientUnits="userSpaceOnUse" cx="250" cy="254" r="196">
+                  <stop offset="0%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="70%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="84%" stopColor="rgba(0,0,0,0.36)"/>
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.72)"/>
+                </radialGradient>
+                <radialGradient id="aI" gradientUnits="userSpaceOnUse" cx="250" cy="254" r="140">
+                  <stop offset="0%" stopColor="rgba(0,0,0,0.55)"/>
+                  <stop offset="22%" stopColor="rgba(0,0,0,0.22)"/>
+                  <stop offset="42%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="72%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="88%" stopColor="rgba(0,0,0,0.22)"/>
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.52)"/>
+                </radialGradient>
+                <radialGradient id="pM" cx="34%" cy="28%" r="66%">
+                  <stop offset="0%" stopColor="#c8c8dc"/>
+                  <stop offset="48%" stopColor="#6e6e88"/>
+                  <stop offset="100%" stopColor="#2a2a3c"/>
+                </radialGradient>
+                <radialGradient id="pB" cx="32%" cy="28%" r="68%">
+                  <stop offset="0%" stopColor="#32324a"/>
+                  <stop offset="100%" stopColor="#10101e"/>
+                </radialGradient>
+                <linearGradient id="nS" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="rgba(255,255,255,0.14)"/>
+                  <stop offset="36%" stopColor="rgba(255,255,255,0.03)"/>
+                  <stop offset="58%" stopColor="rgba(0,0,0,0)"/>
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.30)"/>
+                </linearGradient>
+                <filter id="sgF" filterUnits="userSpaceOnUse" x="-50" y="-50" width="600" height="400">
+                  <feGaussianBlur stdDeviation="4.5" result="b"/>
+                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="cbF" filterUnits="userSpaceOnUse" x="-50" y="-50" width="600" height="400">
+                  <feGaussianBlur stdDeviation="7" result="b"/>
+                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="fbF" filterUnits="userSpaceOnUse" x="-50" y="-50" width="600" height="400">
+                  <feGaussianBlur stdDeviation="4" result="b"/>
+                  <feColorMatrix in="b" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 2.2 0" result="a"/>
+                  <feMerge><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="tW" filterUnits="userSpaceOnUse" x="-100" y="-100" width="700" height="500">
+                  <feGaussianBlur stdDeviation="20" result="b"/>
+                  <feColorMatrix in="b" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 2.6 0"/>
+                </filter>
+                <filter id="tMF" filterUnits="userSpaceOnUse" x="-80" y="-80" width="660" height="460">
+                  <feGaussianBlur stdDeviation="9" result="b"/>
+                  <feColorMatrix in="b" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1.9 0"/>
+                </filter>
+                <filter id="ndF" filterUnits="userSpaceOnUse" x="-50" y="-50" width="600" height="450">
+                  <feDropShadow dx="2" dy="5" stdDeviation="3.5" floodColor="rgba(0,0,0,0.88)"/>
+                </filter>
+                <filter id="sTF" filterUnits="userSpaceOnUse" x="80" y="160" width="340" height="100">
+                  <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor={seg.glow} floodOpacity="0.18"/>
+                </filter>
+                <filter id="dAOF" filterUnits="userSpaceOnUse" x="200" y="210" width="110" height="110">
+                  <feOffset dx="1" dy="2.5" in="SourceAlpha" result="o"/>
+                  <feGaussianBlur stdDeviation="3" in="o" result="b"/>
+                  <feComposite in="b" in2="SourceAlpha" operator="in" result="s"/>
+                  <feFlood floodColor="rgba(0,0,0,0.75)" result="c"/>
+                  <feComposite in="c" in2="s" operator="in" result="cs"/>
+                  <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="cs"/></feMerge>
+                </filter>
+                <clipPath id="fc"><rect x="0" y="0" width="500" height="292" rx="14" ry="14"/></clipPath>
+                <path id="ta" d={arc(202,-90,90)}/>
+              </defs>
+              <g clipPath="url(#fc)">
+                <rect width="500" height="292" fill="url(#bgG)"/>
+                <rect width="500" height="292" fill="url(#tD)"/>
+                <rect width="500" height="292" fill="url(#sV)"/>
+                <path d={arc(212.5,-90,90)} fill="none" stroke="#0c0c18" strokeWidth="46"/>
+                {SEGS.map(sg=>(<path key={`d1${sg.id}`} d={arc(160,sg.s,sg.e)} fill="none" stroke={sg.dim} strokeWidth="60"/>))}
+                {SEGS.map(sg=>(<path key={`d2${sg.id}`} d={arc(115,sg.s,sg.e)} fill="none" stroke={sg.dimI} strokeWidth="30"/>))}
+                <path d={arc(212.5,-90,90)} fill="none" stroke="url(#aO)" strokeWidth="46"/>
+                <path d={arc(115,-90,90)} fill="none" stroke="url(#aI)" strokeWidth="30"/>
+                <path d={arc(131,-90,90)} fill="none" stroke="rgba(0,0,0,0.60)" strokeWidth="9" style={{filter:'blur(4px)'}}/>
+                <path d={arc(191,-90,90)} fill="none" stroke="rgba(0,0,0,0.52)" strokeWidth="10" style={{filter:'blur(5px)'}}/>
+                <path d={arc(160,-90,-8)} fill="none" stroke="rgba(0,0,0,0.46)" strokeWidth="66"/>
+                <path d={arc(115,-90,-8)} fill="none" stroke="rgba(0,0,0,0.50)" strokeWidth="33"/>
+              </g>
+              {passedSegs.map(sg=>(
+                <g key={`ps${sg.id}`}>
+                  <path d={arc(160,sg.s,sg.e)} fill="none" stroke={sg.glow} strokeWidth="64" opacity="0.28" filter="url(#cbF)" style={{mixBlendMode:'screen'}}/>
+                  <path d={arc(160,sg.s,sg.e)} fill="none" stroke={sg.bright} strokeWidth="60" filter="url(#sgF)" opacity="0.90"/>
+                  <path d={arc(115,sg.s,sg.e)} fill="none" stroke={sg.mid} strokeWidth="30" filter="url(#sgF)" opacity="0.90"/>
+                  <path d={arc(191,sg.s,sg.e)} fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="7" style={{filter:'blur(3px)'}}/>
+                  <path d={arc(131,sg.s,sg.e)} fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="6" style={{filter:'blur(2.5px)'}}/>
+                </g>
+              ))}
+              {(() => {
+                const end = Math.min(angle + 0.5, seg.e);
+                return (
+                  <g>
+                    <path d={arc(160,seg.s,end)} fill="none" stroke={seg.glow} strokeWidth="64" opacity="0.24" filter="url(#cbF)" style={{mixBlendMode:'screen'}}/>
+                    <path d={arc(160,seg.s,end)} fill="none" stroke={seg.bright} strokeWidth="60" filter="url(#sgF)" opacity="0.88"/>
+                    <path d={arc(115,seg.s,end)} fill="none" stroke={seg.mid} strokeWidth="30" filter="url(#sgF)" opacity="0.88"/>
+                    <path d={arc(191,seg.s,angle)} fill="none" stroke="rgba(0,0,0,0.26)" strokeWidth="7" style={{filter:'blur(3px)'}}/>
+                    <path d={arc(131,seg.s,angle)} fill="none" stroke="rgba(0,0,0,0.30)" strokeWidth="6" style={{filter:'blur(2.5px)'}}/>
+                  </g>
+                );
+              })()}
+              {coneE > coneS && (
+                <g>
+                  <path d={arc(160,coneS,coneE)} fill="none" stroke={seg.glow} strokeWidth="64" opacity="0.32" filter="url(#cbF)" style={{mixBlendMode:'screen'}}/>
+                  <path d={arc(115,coneS,coneE)} fill="none" stroke={seg.glow} strokeWidth="33" opacity="0.32" filter="url(#cbF)" style={{mixBlendMode:'screen'}}/>
+                </g>
+              )}
+              {focalE > focalS && (
+                <g>
+                  <path d={arc(160,focalS,focalE)} fill="none" stroke={seg.lit} strokeWidth="58" opacity="0.48" filter="url(#fbF)" style={{mixBlendMode:'screen'}}/>
+                  <path d={arc(115,focalS,focalE)} fill="none" stroke="white" strokeWidth="28" opacity="0.11" filter="url(#fbF)" style={{mixBlendMode:'screen'}}/>
+                </g>
+              )}
+              <g clipPath="url(#fc)">
+                {[-45,0,45].map(a=>{
+                  const [ix,iy]=p2c(86,a),[ox,oy]=p2c(242,a);
+                  return <g key={`dv${a}`}>
+                    <line x1={ix+1} y1={iy+1.2} x2={ox+1} y2={oy+1.2} stroke="rgba(0,0,0,0.82)" strokeWidth="4.5"/>
+                    <line x1={ix} y1={iy} x2={ox} y2={oy} stroke="rgba(0,0,0,0.97)" strokeWidth="3"/>
+                    <line x1={ix-0.6} y1={iy-0.6} x2={ox-0.6} y2={oy-0.6} stroke="rgba(255,255,255,0.18)" strokeWidth="1"/>
+                  </g>;
+                })}
+                {[-90,-67.5,-45,-22.5,0,22.5,45,67.5,90].map(a=>{
+                  const [ix,iy]=p2c(236,a),[ox,oy]=p2c(243,a);
+                  const m=[-45,0,45].includes(a);
+                  return <g key={`tk${a}`}>
+                    <line x1={ix+0.5} y1={iy+0.5} x2={ox+0.5} y2={oy+0.5} stroke="rgba(0,0,0,0.70)" strokeWidth={m?2.8:1.6}/>
+                    <line x1={ix} y1={iy} x2={ox} y2={oy} stroke={m?'rgba(255,255,255,0.72)':'rgba(255,255,255,0.38)'} strokeWidth={m?2.2:1.2}/>
+                  </g>;
+                })}
+                <circle cx={CX} cy={CY} r={68} fill="none" stroke="rgba(0,0,0,0.76)" strokeWidth="14" style={{filter:'blur(7px)'}}/>
+                <circle cx={CX} cy={CY} r={61} fill="#0a0a14"/>
+                <circle cx={CX} cy={CY} r={61} fill="none" stroke="rgba(0,0,0,0.92)" strokeWidth="7"/>
+                <circle cx={CX} cy={CY} r={56} fill="#07070f"/>
+                <circle cx={CX} cy={CY} r={56} fill="none" stroke="rgba(0,0,0,0.82)" strokeWidth="5"/>
+                <circle cx={CX} cy={CY} r={52} fill="#05050b"/>
+                <circle cx={CX} cy={CY} r={52} fill="none" stroke="rgba(0,0,0,0.70)" strokeWidth="3"/>
+                <circle cx={CX} cy={CY} r={49} fill="#030308"/>
+                <circle cx={CX} cy={CY} r={60} fill="none" stroke="rgba(255,255,255,0.055)" strokeWidth="0.8"/>
+                <circle cx={CX} cy={CY} r={55} fill="none" stroke="rgba(255,255,255,0.032)" strokeWidth="0.6"/>
+                <path d={ring(46,100,-90,0)} fill="#100e08" opacity="0.70"/>
+                <path d={ring(46,100,0,90)} fill="#0b0e08" opacity="0.70"/>
+                <path d={ring(46,72,-90,90)} fill="rgba(0,0,0,0.46)" style={{filter:'blur(5px)'}}/>
+              </g>
+              <g style={{transform:`rotate(${angle}deg)`,transformOrigin:`${CX}px ${CY}px`,transition:'transform 0.72s cubic-bezier(0.34,1.48,0.64,1)'}} filter="url(#ndF)">
+                <circle cx={CX} cy={152} r={3} fill={seg.glow} filter="url(#tW)" opacity={0.52} style={{mixBlendMode:'screen'}}/>
+                <circle cx={CX} cy={152} r={4.5} fill={seg.glow} filter="url(#tMF)" opacity={0.74} style={{mixBlendMode:'screen'}}/>
+                <path d={`M${CX} 154 Q${CX-7.5} 202 ${CX-9} ${CY} A9 9 0 0 0 ${CX+9} ${CY} Q${CX+7.5} 202 ${CX} 154Z`} fill="#38386a"/>
+                <path d={`M${CX} 154 Q${CX-7.5} 202 ${CX-9} ${CY} A9 9 0 0 0 ${CX+9} ${CY} Q${CX+7.5} 202 ${CX} 154Z`} fill="url(#nS)"/>
+                <path d={`M${CX} 156 Q${CX} 210 ${CX} 248`} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="0.8" strokeLinecap="round"/>
+                <path d={`M${CX} 155 Q${CX-4.5} 202 ${CX-6} 248`} fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="1.4" strokeLinecap="round"/>
+                <path d={`M${CX} 155 Q${CX+4.5} 204 ${CX+6} 249`} fill="none" stroke="rgba(0,0,0,0.45)" strokeWidth="1.0" strokeLinecap="round"/>
+                <circle cx={CX} cy={152} r={3.8} fill="white" opacity={0.78} style={{filter:'blur(1px)',mixBlendMode:'screen'}}/>
+                <circle cx={CX} cy={152} r={6} fill={seg.glow} opacity={0.42} style={{filter:'blur(2.5px)',mixBlendMode:'screen'}}/>
+              </g>
+              <g clipPath="url(#fc)">
+                <ellipse cx={CX+3} cy={CY+5} rx={26} ry={15} fill="rgba(0,0,0,0.66)" style={{filter:'blur(6px)'}}/>
+                <circle cx={CX} cy={CY} r={24} fill="url(#pB)"/>
+                <circle cx={CX} cy={CY} r={24} fill="none" stroke="rgba(0,0,0,0.70)" strokeWidth="1.6"/>
+                <circle cx={CX} cy={CY} r={21} fill="#0b0b1c"/>
+                <circle cx={CX} cy={CY} r={21} fill="none" stroke="rgba(0,0,0,0.80)" strokeWidth="2.2"/>
+                <circle cx={CX} cy={CY} r={18.5} fill="#080812"/>
+                <circle cx={CX} cy={CY} r={18.5} fill="none" stroke="rgba(0,0,0,0.72)" strokeWidth="1.8"/>
+                <circle cx={CX} cy={CY} r={13.5} fill="url(#pM)" filter="url(#dAOF)"/>
+                <circle cx={CX} cy={CY} r={13.5} fill="none" stroke="rgba(0,0,0,0.54)" strokeWidth="1.1"/>
+                <circle cx={CX} cy={CY} r={13} fill="none" stroke="rgba(255,255,255,0.11)" strokeWidth="0.7"/>
+                <ellipse cx={CX-3.4} cy={CY-4} rx={4} ry={2.5} fill="rgba(255,255,255,0.33)" transform={`rotate(-36,${CX-3.4},${CY-4})`}/>
+                <circle cx={CX-4.4} cy={CY-4.8} r={1.5} fill="rgba(255,255,255,0.56)"/>
+                <circle cx={CX-5.2} cy={CY-5.5} r={0.65} fill="rgba(255,255,255,0.82)"/>
+                <text x={CX+2} y={220} textAnchor="middle" fill="rgba(0,0,0,0.97)" fontSize="63" fontWeight="300" fontFamily="Montserrat,sans-serif" style={{letterSpacing:'-2px'}}>{score}</text>
+                <text x={CX} y={218} textAnchor="middle" fill="#dcdcf2" fontSize="63" fontWeight="300" fontFamily="Montserrat,sans-serif" style={{letterSpacing:'-2px'}} filter="url(#sTF)">{score}</text>
+                <text x={CX} y={238} textAnchor="middle" fill={seg.glow} fontSize="8" fontWeight="700" fontFamily="Montserrat,sans-serif" letterSpacing="5" opacity="0.72">{seg.label}</text>
+                {SEGS.map((sg, i) => {
+                  const isLit = angle >= sg.s;
+                  return (
+                    <text key={sg.id} fill={isLit ? sg.glow : 'rgba(120,120,155,0.32)'} fontSize="9" fontWeight="700" fontFamily="Montserrat,sans-serif" opacity={isLit ? 0.88 : 1}>
+                      <textPath href="#ta" startOffset={`${12.5+25*i}%`} textAnchor="middle">{sg.label}</textPath>
+                    </text>
+                  );
+                })}
+                <path d={arc(238.5,-87,87)} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth="1"/>
+              </g>
+            </svg>
+          </div>
+          <div className="controls">
+            <div className="range-labels">
+              <span style={{opacity:0}}>·</span><span>Quality</span><span style={{opacity:0}}>·</span>
+            </div>
+            <input type="range" min="300" max="850" value={score}
+              onChange={e=>setScore(+e.target.value)} style={{'--tc':seg.glow}}/>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Gauge/>);
+</script>
+</body>
+</html>

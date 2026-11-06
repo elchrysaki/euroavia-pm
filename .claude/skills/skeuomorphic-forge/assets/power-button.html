@@ -1,0 +1,343 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skeuomorphic Power Button</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(20,20,40,0.6) 0%, transparent 65%),
+                repeating-linear-gradient(0deg,
+                    transparent 0px, transparent 3px,
+                    rgba(255,255,255,0.004) 3px, rgba(255,255,255,0.004) 4px),
+                repeating-linear-gradient(90deg,
+                    transparent 0px, transparent 3px,
+                    rgba(255,255,255,0.003) 3px, rgba(255,255,255,0.003) 4px),
+                #06060a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        /* ═══ PANEL — fusil bleu nuit, serré ═══════════════════════════════ */
+        .panel {
+            position: relative;
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    transparent 0px,
+                    rgba(110,120,155,0.032) 1px,
+                    transparent 2px,
+                    transparent 5px
+                ),
+                linear-gradient(168deg,
+                    #3e3e56 0%,
+                    #32323e 20%,
+                    #28282e 45%,
+                    #2c2c38 68%,
+                    #363648 100%
+                );
+            border-radius: 10px;
+            padding: 14px 20px 11px;
+
+            box-shadow:
+                0  1px  3px rgba(0,0,0,1),
+                0  4px  8px rgba(0,0,0,0.96),
+                0 10px 22px rgba(0,0,0,0.82),
+                0 22px 44px rgba(0,0,0,0.52),
+                0 38px 70px rgba(0,0,0,0.22),
+                inset  1px  1px 0   rgba(90,100,135,0.35),
+                inset  2px  2px 0   rgba(90,100,135,0.14),
+                inset  0    1px 6px rgba(90,100,135,0.08),
+                inset -1px -1px 0   rgba(0,0,0,0.75),
+                inset -2px -2px 0   rgba(0,0,0,0.45),
+                inset  0    2px 10px rgba(0,0,0,0.55),
+                inset  0   -4px 10px rgba(0,0,0,0.65),
+                inset  3px  3px 18px rgba(30,30,60,0.20);
+        }
+
+        /* ═══ VIS — 9 couches shadow, sphère convexe ═══════════════════════ */
+        .screw {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background:
+                radial-gradient(circle at 35% 28%,
+                    #3a3a4e 0%,
+                    #22222e 38%,
+                    #141420 70%,
+                    #0a0a10 100%
+                );
+            box-shadow:
+                inset  1px  1px 2px rgba(90,100,130,0.55),
+                inset  0    1px 1px rgba(120,130,160,0.30),
+                inset -1px -1px 3px rgba(0,0,0,0.90),
+                inset  0   -2px 4px rgba(0,0,0,0.85),
+                inset  0    0   5px rgba(0,0,0,0.70),
+                0  1px  2px rgba(0,0,0,1),
+                0  2px  5px rgba(0,0,0,0.85),
+                0  4px  9px rgba(0,0,0,0.55),
+                0  0    0   1.5px rgba(0,0,0,0.75);
+        }
+        .screw::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 16%; right: 16%;
+            height: 1.5px;
+            margin-top: -0.75px;
+            background: linear-gradient(90deg,
+                transparent 0%, rgba(0,0,0,0.8) 20%,
+                rgba(0,0,0,0.95) 50%, rgba(0,0,0,0.8) 80%, transparent 100%);
+            border-radius: 1px;
+        }
+        .screw::after {
+            content: '';
+            position: absolute;
+            left: 50%; top: 16%; bottom: 16%;
+            width: 1.5px;
+            margin-left: -0.75px;
+            background: linear-gradient(180deg,
+                transparent 0%, rgba(0,0,0,0.8) 20%,
+                rgba(0,0,0,0.95) 50%, rgba(0,0,0,0.8) 80%, transparent 100%);
+            border-radius: 1px;
+        }
+        .screw-tl { top: 7px;  left: 9px;  }
+        .screw-tr { top: 7px;  right: 9px; }
+        .screw-bl { bottom: 7px; left: 9px;  }
+        .screw-br { bottom: 7px; right: 9px; }
+
+        /* ═══ WELL — 10 couches inset ══════════════════════════════════════ */
+        .well {
+            background: #0a0a14;
+            border-radius: 8px;
+            padding: 4px;
+            display: inline-block;
+            box-shadow:
+                inset 0  1px  2px rgba(0,0,0,1),
+                inset 0  2px  5px rgba(0,0,0,0.98),
+                inset 0  5px 12px rgba(0,0,0,0.92),
+                inset 0  9px 22px rgba(0,0,0,0.80),
+                inset 0 14px 30px rgba(0,0,0,0.55),
+                inset  2px 0  8px rgba(0,0,0,0.70),
+                inset -2px 0  8px rgba(0,0,0,0.70),
+                inset 0 -3px  8px rgba(0,0,0,0.75),
+                0 1px 0 rgba(60,65,90,0.22),
+                0 0 0 1px rgba(0,0,0,0.60);
+        }
+
+        /* ═══ BUTTON FACE — 17 couches — surface convexe épaisse ═══════════ */
+        .btn {
+            width: 110px;
+            height: 44px;
+            border-radius: 5px;
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition:
+                transform 0.07s cubic-bezier(0.22, 0.61, 0.36, 1),
+                box-shadow 0.07s cubic-bezier(0.22, 0.61, 0.36, 1);
+
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    transparent 0px,
+                    rgba(90,100,135,0.028) 1px,
+                    transparent 2px,
+                    transparent 5px
+                ),
+                linear-gradient(180deg,
+                    #52526e 0%,
+                    #44445a 10%,
+                    #363648 28%,
+                    #2c2c3c 50%,
+                    #30303e 72%,
+                    #383848 88%,
+                    #2e2e3e 100%
+                );
+
+            /* 17 couches exactes */
+            box-shadow:
+                inset  0    1px 0   rgba(100,115,155,0.70),
+                inset  0    3px 5px rgba(85,100,140,0.22),
+                inset  0    5px 10px rgba(70,85,120,0.10),
+                inset  1px  0   0   rgba(85,98,132,0.30),
+                inset  3px  0   6px rgba(70,85,115,0.10),
+                inset -1px  0   0   rgba(0,0,0,0.75),
+                inset -3px  0   7px rgba(0,0,0,0.40),
+                inset  0   -1px 0   rgba(0,0,0,0.96),
+                inset  0   -3px 6px rgba(0,0,0,0.80),
+                inset  0   -7px 14px rgba(0,0,0,0.60),
+                inset  0    0   20px rgba(0,0,0,0.38),
+                0  1px  1px rgba(0,0,0,1),
+                0  3px  5px rgba(0,0,0,0.97),
+                0  6px 12px rgba(0,0,0,0.88),
+                0 12px 22px rgba(0,0,0,0.68),
+                0 20px 36px rgba(0,0,0,0.38),
+                0 30px 55px rgba(0,0,0,0.16);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: radial-gradient(
+                ellipse 75% 45% at 30% 18%,
+                rgba(130,148,195,0.28) 0%,
+                rgba(100,115,160,0.12) 40%,
+                transparent 70%
+            );
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0;
+            bottom: 0;
+            height: 3px;
+            border-radius: 0 0 5px 5px;
+            background: linear-gradient(180deg,
+                rgba(0,0,0,0.0) 0%,
+                rgba(0,0,0,0.75) 100%
+            );
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        .btn:active {
+            transform: translateY(2px) scale(0.992);
+            box-shadow:
+                inset  0    1px 0   rgba(100,115,155,0.30),
+                inset  0    3px 5px rgba(85,100,140,0.10),
+                inset  0    5px 10px rgba(70,85,120,0.06),
+                inset  1px  0   0   rgba(85,98,132,0.12),
+                inset  3px  0   6px rgba(70,85,115,0.05),
+                inset -1px  0   0   rgba(0,0,0,0.75),
+                inset -3px  0   7px rgba(0,0,0,0.40),
+                inset  0   -1px 0   rgba(0,0,0,0.96),
+                inset  0   -3px 6px rgba(0,0,0,0.80),
+                inset  0   -5px 12px rgba(0,0,0,0.70),
+                inset  0    2px 24px rgba(0,0,0,0.60),
+                0  1px  1px rgba(0,0,0,0.95),
+                0  2px  4px rgba(0,0,0,0.80),
+                0  4px  8px rgba(0,0,0,0.50),
+                0  6px 12px rgba(0,0,0,0.22),
+                0  9px 18px rgba(0,0,0,0.08),
+                0 12px 22px rgba(0,0,0,0.04);
+        }
+
+        /* ═══ GLOW SLOT — 6 couches inset ══════════════════════════════════ */
+        .glow-slot {
+            position: relative;
+            z-index: 1;
+            width: 64%;
+            height: 5px;
+            border-radius: 3px;
+            background: #02020a;
+            box-shadow:
+                inset 0  1px 2px  rgba(0,0,0,1),
+                inset 0  2px 6px  rgba(0,0,0,0.98),
+                inset 0  4px 10px rgba(0,0,0,0.90),
+                inset 0 -1px 2px  rgba(0,0,0,0.85),
+                0 -1px 0 rgba(0,0,0,0.95),
+                0  1px 0 rgba(60,65,90,0.12);
+        }
+
+        .glow-strip {
+            width: 100%;
+            height: 100%;
+            border-radius: 2px;
+            background: #02020a;
+            transition: background 0.30s ease, box-shadow 0.30s ease;
+        }
+
+        .glow-strip.on {
+            background: radial-gradient(
+                ellipse at 50% 50%,
+                #fffbf0 0%,
+                #ffbe30 18%,
+                #e87820 50%,
+                #7a2a00 100%
+            );
+            box-shadow:
+                0 0  1px #fffadf,
+                0 0  4px rgba(255,175,10,1),
+                0 0  9px rgba(235,120,20,0.96),
+                0 0 18px rgba(225,90,10,0.75),
+                0 0 32px rgba(200,60,0,0.45),
+                0 0 52px rgba(180,40,0,0.20),
+                inset 0 0 2px rgba(255,255,220,0.50);
+        }
+
+        /* ═══ LABEL silkscreen ══════════════════════════════════════════════ */
+        .label-text {
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 3.5px;
+            text-transform: uppercase;
+            color: #50506a;
+            margin-top: 8px;
+            text-align: center;
+            text-shadow:
+                0  1px 0 rgba(80,90,120,0.08),
+                0 -1px 0 rgba(0,0,0,0.70);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const PowerButton = () => {
+            const [isOn, setIsOn] = useState(true);
+
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div className="panel">
+                        <div className="screw screw-tl"></div>
+                        <div className="screw screw-tr"></div>
+                        <div className="screw screw-bl"></div>
+                        <div className="screw screw-br"></div>
+
+                        <div className="well">
+                            <div
+                                className="btn"
+                                onClick={() => setIsOn(prev => !prev)}
+                                role="button"
+                                aria-pressed={isOn}
+                                aria-label={isOn ? 'ON' : 'OFF'}
+                            >
+                                <div className="glow-slot">
+                                    <div className={`glow-strip ${isOn ? 'on' : ''}`}></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="label-text">Power</div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PowerButton />);
+    </script>
+</body>
+</html>
