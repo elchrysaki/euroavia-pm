@@ -217,11 +217,31 @@ async function handleApi(request, env, url) {
   return fail("Not found.", 404);
 }
 
+// Create tables on first use so a fresh database works without a separate migration step
+// (mirrors migrations/0001_init.sql; every statement is idempotent).
+let schemaReady = null;
+function ensureSchema(env) {
+  schemaReady ??= env.DB.batch([
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', year INTEGER NOT NULL, created_at INTEGER NOT NULL)",
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS responses (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id), name TEXT NOT NULL, token TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+    ),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_responses_event ON responses(event_id, created_at)"),
+  ]).catch((err) => {
+    schemaReady = null; // retry on the next request
+    throw err;
+  });
+  return schemaReady;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
       try {
+        await ensureSchema(env);
         return await handleApi(request, env, url);
       } catch (err) {
         console.error(err);

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "convene",
+  "name": "euroavia-pm",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
   "assets": {
@@ -13,8 +13,7 @@
     {
       "binding": "DB",
       "database_name": "convene-db",
-      // Replace with the id printed by: npx wrangler d1 create convene-db
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "a36ee674-1572-45b3-8574-990f1819a5b3",
       "migrations_dir": "migrations"
     }
   ],
