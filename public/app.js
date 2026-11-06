@@ -1,4 +1,4 @@
-// Convene — client app (no build step, no framework)
+// Wingman — client app (no build step, no framework)
 
 /* ------------------------------------------------------------------ */
 /* Utilities                                                           */
@@ -799,7 +799,7 @@ function route() {
 /* ------------------------------------------------------------------ */
 
 function renderHome() {
-  document.title = "Convene — find the days that work";
+  document.title = "Wingman — find the days that work";
   const today = todayStr();
   const nextYear = new Date().getFullYear() + 1;
   const recent = store.get("convene:events", []);
@@ -962,7 +962,7 @@ function setupSegmented(root, onChange) {
 function renderCreated(id) {
   const meta = store.get("convene:events", []).find((e) => e.id === id) || { title: "Your event" };
   const url = `${location.origin}/e/${id}`;
-  document.title = `${meta.title} — Convene`;
+  document.title = `${meta.title} — Wingman`;
   app.innerHTML = `
     <div class="created">
       <div class="check-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
@@ -1040,7 +1040,7 @@ async function renderEvent(id, { keepTab = false } = {}) {
 function paintEvent(data, prevTab) {
   current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set() };
   const { event, responses } = data;
-  document.title = `${event.title} — Convene`;
+  document.title = `${event.title} — Wingman`;
 
   const recent = store.get("convene:events", []);
   if (!recent.some((e) => e.id === event.id)) {
