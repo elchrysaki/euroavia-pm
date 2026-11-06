@@ -133,7 +133,7 @@ a { color: var(--accent); }
   border-bottom: 0.5px solid var(--separator);
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--label); font-weight: 700; font-size: 17px; letter-spacing: -0.2px; }
-.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: url(/icon.svg) center/cover; box-shadow: 0 2px 8px rgba(10, 90, 220, .3); }
+.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: url(/icon-192.png) center/cover; box-shadow: 0 2px 8px rgba(10, 90, 220, .3); }
 .nav-actions { display: flex; gap: 8px; }
 
 /* ---------- Layout ---------- */
