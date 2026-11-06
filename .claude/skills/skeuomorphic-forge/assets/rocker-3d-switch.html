@@ -1,0 +1,264 @@
+<!--
+  Rocker 3D Switch (°C / °F)
+  Source: Codepen
+  Key techniques:
+    - CSS perspective + rotateY for physical rocker tilt effect
+    - Dual shadow elements that rotate to simulate light source shift
+    - Inner concave track with multi-layer inset shadows
+    - Option separator with highlight/shadow pair
+    - Text engraving via text-shadow (dark above, light below)
+    - Dark theme support via prefers-color-scheme
+    - TypeScript click handler toggles aria-labelledby attribute
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rocker 3D Switch</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { border: 0; box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --hue: 223;
+  --bg: hsl(var(--hue),10%,90%);
+  --fg: hsl(var(--hue),10%,10%);
+  --trans-dur: 0.3s;
+  --trans-timing: cubic-bezier(0.65,0,0.35,1);
+  font-size: clamp(60px, calc(60px + (120 - 60) * (100vw - 280px) / (3840 - 280)), 120px);
+}
+
+body, button { font: 1em/1.5 "DM Sans", sans-serif; }
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  display: flex;
+  height: 100vh;
+  transition: background-color var(--trans-dur), color var(--trans-dur);
+}
+
+/* ═══ SWITCH CONTAINER ═════════════════════════════════════════════════════ */
+.switch { display: flex; margin: auto; }
+
+.switch__label {
+  overflow: hidden;
+  margin-inline-end: 0.75em;
+  position: absolute;
+  width: 1px; height: 1px;
+}
+
+/* ═══ BUTTON — outer housing ══════════════════════════════════════════════ */
+.switch__button {
+  background-color: transparent;
+  border-radius: 0.75em;
+  box-shadow: 0 0 0 0.125em hsla(var(--hue),90%,50%,0);
+  cursor: pointer;
+  outline: transparent;
+  width: 100%; height: 100%;
+  -webkit-appearance: none; appearance: none;
+  z-index: 1;
+  transition: box-shadow calc(var(--trans-dur) / 2);
+}
+.switch__button:focus-visible {
+  box-shadow: 0 0 0 0.125em hsla(var(--hue),90%,50%,1);
+}
+.switch__button,
+.switch__button-wrap { display: block; position: relative; }
+
+/* ═══ BUTTON WRAP — concave track with 3-layer inset shadow ═══════════════ */
+.switch__button-wrap {
+  box-shadow:
+    0 0.0625em 0.0625em hsl(var(--hue),10%,65%) inset,
+    0 -0.0625em 0.0625em hsl(var(--hue),10%,87.5%) inset,
+    0 0.25em 0.25em hsl(var(--hue),10%,70%) inset;
+  border-radius: 0.75em;
+  width: 3.1875em; height: 1.5em;
+  transition: box-shadow var(--trans-dur);
+}
+
+/* ═══ INNER — rocker surface with perspective ═════════════════════════════ */
+.switch__inner {
+  background-color: hsl(var(--hue),10%,90%);
+  box-shadow: 0 -0.125em 0.25em hsl(var(--hue),10%,80%) inset;
+  border-radius: 0.5em;
+  display: block;
+  perspective: 20em;
+  position: absolute;
+  inset: 0.25em;
+  transition: background-color var(--trans-dur), box-shadow var(--trans-dur);
+}
+
+/* ═══ OPTIONS — the tilting face (rotateY creates 3D rocker) ═════════════ */
+.switch__options {
+  background-color: hsl(var(--hue),10%,90%);
+  border-radius: inherit;
+  box-shadow: 0 0 1px hsl(0,0%,100%) inset;
+  display: flex;
+  justify-content: space-around;
+  font-size: 0.5em;
+  line-height: 2;
+  width: 100%; height: 100%;
+  position: absolute;
+  transform: translateX(-0.125rem) rotateY(-15deg);
+  transition: background-color var(--trans-dur), box-shadow var(--trans-dur), transform var(--trans-dur) var(--trans-timing);
+}
+
+/* Left side shadow (visible when tilted left) */
+.switch__options::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+  width: 45%; height: 100%;
+  border-radius: 0.5rem 0 0 0.5rem;
+  box-shadow:
+    0 1px 0.0625rem hsla(var(--hue),10%,10%,0.7) inset,
+    0.125rem 0.25rem 0.25rem hsla(var(--hue),10%,10%,0.3) inset;
+  -webkit-mask-image: linear-gradient(-90deg, hsla(var(--hue),10%,90%,0), hsl(var(--hue),10%,90%));
+  mask-image: linear-gradient(-90deg, hsla(var(--hue),10%,90%,0), hsl(var(--hue),10%,90%));
+  transition: opacity var(--trans-dur) var(--trans-timing);
+}
+
+/* Right side shadow (visible when tilted right) */
+.switch__options::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 0; right: 0;
+  width: 45%; height: 100%;
+  border-radius: 0 0.5rem 0.5rem 0;
+  box-shadow:
+    0 1px 0.0625rem hsla(var(--hue),10%,10%,0.7) inset,
+    -0.125rem 0.25rem 0.25rem hsla(var(--hue),10%,10%,0.3) inset;
+  -webkit-mask-image: linear-gradient(90deg, hsla(var(--hue),10%,90%,0), hsl(var(--hue),10%,90%));
+  mask-image: linear-gradient(90deg, hsla(var(--hue),10%,90%,0), hsl(var(--hue),10%,90%));
+  opacity: 0;
+  transition: opacity var(--trans-dur) var(--trans-timing);
+}
+
+/* ═══ OPTION LABELS — engraved text ═══════════════════════════════════════ */
+.switch__option-label {
+  color: var(--fg);
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
+  text-shadow:
+    0 -1px 0 hsl(var(--hue),10%,40%),
+    0 1px 0 hsl(0,0%,100%);
+  transition: color var(--trans-dur), text-shadow var(--trans-dur);
+}
+.switch__option-label:last-child {
+  color: hsl(var(--hue),10%,60%);
+}
+
+/* Separator line */
+.switch__option-sep {
+  background-color: hsl(var(--hue),10%,75%);
+  box-shadow: 1px 0 0 hsl(0,0%,100%);
+  width: 1px; min-width: 1px;
+  margin: auto 0;
+  height: 0.75rem;
+  transition: background-color var(--trans-dur), box-shadow var(--trans-dur);
+}
+
+/* ═══ SHADOW ELEMENTS — rotate to follow light source ═════════════════════ */
+.switch__shadow {
+  position: absolute;
+  border-radius: 0.375em 0.875em 0.375em 0.375em / 0.375em 0.625em 0.125em 0.375em;
+  box-shadow: 0 0 0 0.125em hsla(var(--hue),10%,10%,0.7);
+  display: block;
+  top: 0.375em; left: 0.375em;
+  width: 1.25em; height: 0.75em;
+  transform: rotate(0);
+  transform-origin: 1em 0.375em;
+  transition: box-shadow var(--trans-dur) var(--trans-timing), transform var(--trans-dur) var(--trans-timing);
+  z-index: -1;
+}
+.switch__shadow + .switch__shadow {
+  border-radius: 0.875em 0.375em 0.375em 0.375em / 0.625em 0.375em 0.375em 0.125em;
+  box-shadow: 0 0 0.25em 0.125em hsla(var(--hue),10%,10%,0.7);
+  right: 0.375em; left: auto;
+  transform: rotate(7.5deg);
+  transform-origin: 0.5em 0.375em;
+}
+
+/* ═══ TOGGLED STATE — rocker tilts right ══════════════════════════════════ */
+.switch__button[aria-labelledby="f"] .switch__options {
+  transform: translateX(0.125rem) rotateY(15deg);
+}
+.switch__button[aria-labelledby="f"] .switch__options::before { opacity: 0; }
+.switch__button[aria-labelledby="f"] .switch__options::after { opacity: 1; }
+
+.switch__button[aria-labelledby="f"] .switch__option-label {
+  color: hsl(var(--hue),10%,60%);
+}
+.switch__button[aria-labelledby="f"] .switch__option-label:last-child {
+  color: var(--fg);
+}
+
+.switch__button[aria-labelledby="f"] .switch__shadow {
+  box-shadow: 0 0 0.25em 0.125em hsla(var(--hue),10%,10%,0.7);
+  transform: rotate(-7.5deg);
+}
+.switch__button[aria-labelledby="f"] .switch__shadow + .switch__shadow {
+  box-shadow: 0 0 0 0.125em hsla(var(--hue),10%,10%,0.7);
+  transform: rotate(0);
+}
+
+/* ═══ DARK THEME ══════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: hsl(var(--hue),10%,30%);
+    --fg: hsl(var(--hue),10%,90%);
+  }
+  .switch__button-wrap {
+    box-shadow:
+      0 0.0625em 0.0625em hsl(var(--hue),10%,5%) inset,
+      0 -0.0625em 0.0625em hsl(var(--hue),10%,27.5%) inset,
+      0 0.25em 0.25em hsl(var(--hue),10%,20%) inset;
+  }
+  .switch__inner, .switch__options { background-color: hsl(var(--hue),10%,30%); }
+  .switch__inner { box-shadow: 0 -0.125em 0.25em hsl(var(--hue),10%,20%) inset; }
+  .switch__options { box-shadow: 0 0 1px hsl(var(--hue),10%,50%) inset; }
+  .switch__option-label {
+    text-shadow: 0 -1px 0 hsl(var(--hue),10%,10%), 0 1px 0 hsl(var(--hue),10%,50%);
+  }
+  .switch__option-label:last-child { color: hsl(var(--hue),10%,20%); }
+  .switch__option-sep {
+    background-color: hsl(var(--hue),10%,20%);
+    box-shadow: 1px 0 0 hsl(var(--hue),10%,50%);
+  }
+  .switch__button[aria-labelledby="f"] .switch__option-label { color: hsl(var(--hue),10%,20%); }
+}
+</style>
+</head>
+<body>
+
+<div class="switch">
+  <label class="switch__label" for="temperature-scale">Temperature</label>
+  <!-- aria-labelledby="f" = starts on Fahrenheit. CSS base state = Celsius visual (rotateY -15deg).
+       The [aria-labelledby="f"] selector overrides to Fahrenheit visual (rotateY +15deg). -->
+  <button class="switch__button" type="button" id="temperature-scale" title="Temperature Scale" aria-labelledby="f">
+    <span class="switch__button-wrap">
+      <span class="switch__shadow"></span>
+      <span class="switch__shadow"></span>
+      <span class="switch__inner">
+        <span class="switch__options">
+          <span id="c" class="switch__option-label" aria-hidden="true">&deg;C</span>
+          <span class="switch__option-sep"></span>
+          <span id="f" class="switch__option-label" aria-hidden="true">&deg;F</span>
+        </span>
+      </span>
+    </span>
+  </button>
+</div>
+
+<script>
+document.getElementById('temperature-scale').addEventListener('click', function() {
+  const current = this.getAttribute('aria-labelledby');
+  this.setAttribute('aria-labelledby', current === 'c' ? 'f' : 'c');
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!--
+  Neumorphic Pressed Buttons (light theme)
+  Source: Codepen
+  Key techniques:
+    - Light neumorphism: 4-directional outer shadows (top/bottom/left/right light/dark pairs)
+    - Inset shadow on hover: 3px inset #cecfd1 creates "settling into surface" feel
+    - Active state: deep inset (5px + 30px) simulates full mechanical depression
+    - Focus animation: alternating between blue inset glow and neutral inset (pulsing ring)
+    - Linear gradient background (bottom-dark to top-white) for convex surface illusion
+    - Text shadow: single white 1px below for engraved-on-light-surface look
+    - Scale(0.975) on hover, scale(0.95) on active for physical compression
+    - Icon variant (.icon) with reduced width for square buttons
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neumorphic Pressed Buttons</title>
+<link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<style>
+@keyframes active {
+  from {
+    box-shadow:
+      0 4px 3px 1px #fcfcfc,
+      0 6px 8px #d6d7d9,
+      0 -4px 4px #cecfd1,
+      0 -6px 4px #fefefe,
+      inset 0 0 10px 0px rgba(0, 0, 250, 0.6);
+  }
+  to {
+    box-shadow:
+      0 4px 3px 1px #fcfcfc,
+      0 6px 8px #d6d7d9,
+      0 -4px 4px #cecfd1,
+      0 -6px 4px #fefefe,
+      inset 0 0 3px 3px #cecfd1;
+  }
+}
+
+*, *:before, *:after { box-sizing: border-box; }
+
+body {
+  margin: 0; padding: 0;
+  background: #f8f8f8;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Source Sans Pro", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #606060;
+  user-select: none;
+}
+
+a { text-decoration: none; }
+
+/* ═══ BUTTON GRID — nav bar layout ═══════════════════════════════════════ */
+.grid {
+  max-width: 600px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 50px 100px 100px 50px;
+  align-items: center;
+  justify-content: center;
+  grid-gap: 20px;
+}
+
+/* ═══ BUTTON — neumorphic pressed style ═══════════════════════════════════
+   4 outer shadows create the "floating above surface" look:
+   - Bottom: #fcfcfc (white highlight below)
+   - Far bottom: #d6d7d9 (soft gray ambient)
+   - Top: #cecfd1 (gray above)
+   - Far top: #fefefe (bright above)
+   + 1 inset: #cecfd1 (subtle inner edge definition)
+
+   The gradient background (d8d9db → fff → fdfdfd) creates convex curvature.
+   ═════════════════════════════════════════════════════════════════════════ */
+button,
+[role="button"] {
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-user-select: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  cursor: pointer;
+  width: 100px; height: 50px;
+  background-image: linear-gradient(to top, #d8d9db 0%, #fff 80%, #fdfdfd 100%);
+  border-radius: 30px;
+  border: 1px solid #8f9092;
+  box-shadow:
+    0 4px 3px 1px #fcfcfc,
+    0 6px 8px #d6d7d9,
+    0 -4px 4px #cecfd1,
+    0 -6px 4px #fefefe,
+    inset 0 0 3px 0 #cecfd1;
+  transition: all 0.2s ease;
+  font-family: "Source Sans Pro", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #606060;
+  text-shadow: 0 1px #fff;
+}
+
+button::-moz-focus-inner { border: 0; }
+button > * { transition: transform 0.2s ease; }
+
+/* Hover — inset deepens, content scales down slightly */
+button:hover:not([disabled]) {
+  box-shadow:
+    0 4px 3px 1px #fcfcfc,
+    0 6px 8px #d6d7d9,
+    0 -4px 4px #cecfd1,
+    0 -6px 4px #fefefe,
+    inset 0 0 3px 3px #cecfd1;
+}
+button:hover:not([disabled]) > * {
+  transform: scale(0.975);
+}
+
+/* Focus — pulsing blue glow ring */
+button:focus:not(:active) {
+  animation: active 0.9s alternate infinite;
+  outline: none;
+}
+
+/* Active — full mechanical depression */
+button:active:not([disabled]) {
+  box-shadow:
+    0 4px 3px 1px #fcfcfc,
+    0 6px 8px #d6d7d9,
+    0 -4px 4px #cecfd1,
+    0 -6px 4px #fefefe,
+    inset 0 0 5px 3px #999,
+    inset 0 0 30px #aaa;
+}
+button:active:not([disabled]) > * {
+  transform: scale(0.95);
+}
+
+/* Disabled */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Icon variant — square */
+button.icon { width: 50px; }
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 12;
+}
+</style>
+</head>
+<body>
+
+<div class="grid">
+  <button type="button" class="icon">
+    <span class="material-symbols-outlined">home</span>
+  </button>
+  <button type="button"><span>Gallery</span></button>
+  <button type="button"><span>Writing</span></button>
+  <button type="button" class="icon">
+    <span class="material-symbols-outlined">photo_camera</span>
+  </button>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,279 @@
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+*, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --dur: 0.3s; --dur2: 0.15s; font-size: 16px; }
+
+body {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background:
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.04) 0px, transparent 1px, transparent 7px),
+        repeating-linear-gradient(180deg, rgba(0,0,0,0.04) 0px, transparent 1px, transparent 7px),
+        radial-gradient(ellipse at 38% 32%, #3c3c42 0%, #252528 52%, #111114 100%);
+}
+
+form {
+    display: flex; flex-direction: column; justify-content: space-between;
+    align-items: center; gap: 2.2em; margin: 0 auto;
+    width: 16em; padding: 2.4em 1.2em; border-radius: 0.6em;
+    position: relative;
+    background:
+        linear-gradient(145deg,
+            transparent 0%, transparent 26%,
+            rgba(255,255,255,0.04) 28%, rgba(255,255,255,0.13) 32%,
+            rgba(255,255,255,0.05) 35%, transparent 38%, transparent 100%),
+        repeating-linear-gradient(90deg,
+            rgba(255,255,255,0.015) 0px, transparent 0.8px, transparent 3px),
+        linear-gradient(145deg,
+            #585862 0%, #404048 12%, #2e2e36 30%,
+            #1e1e24 52%, #141418 76%, #0c0c10 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.36),
+        inset 1px 0 0 rgba(255,255,255,0.17),
+        inset -1px 0 0 rgba(0,0,0,0.80),
+        inset 0 -1px 0 rgba(0,0,0,0.88),
+        inset 0 3px 6px rgba(255,255,255,0.09),
+        inset 7px 7px 24px rgba(255,255,255,0.055),
+        inset -9px -9px 26px rgba(0,0,0,0.72),
+        inset 0 0 65px rgba(0,0,0,0.44),
+        0 1px 0 rgba(0,0,0,1),
+        0 3px 7px rgba(0,0,0,0.94),
+        0 10px 22px rgba(0,0,0,0.80),
+        0 26px 52px rgba(0,0,0,0.58),
+        0 54px 96px rgba(0,0,0,0.34);
+}
+
+form label {
+    background-color: #d00;
+    background-image:
+        radial-gradient(0.3em 0.25em at 38% 26%, rgb(255,255,255) 0%, rgba(255,255,255,0) 100%),
+        radial-gradient(0.25em 0.25em at 28% 74%, rgba(255,255,255,0.48), rgba(255,255,255,0)),
+        radial-gradient(0.3em 0.3em at 62% 80%, rgba(255,255,255,0.40), rgba(255,255,255,0)),
+        radial-gradient(100% 100%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.22) 40%, rgba(0,0,0,0.58) 50%);
+    border-radius: 50%;
+    box-shadow:
+        inset 0 0.10em 0.20em rgba(0,0,0,0.80),
+        0 0 0 0.08em rgba(0,0,0,0.68),
+        0 0 0 0.16em rgba(28,18,18,0.78),
+        0 0 0.55em 0.08em rgba(255,20,20,0.75),
+        0 0 1.10em 0.18em rgba(210,0,0,0.52),
+        0 0 2.20em 0.36em rgba(180,0,0,0.30),
+        0 0 3.60em 0.55em rgba(150,0,0,0.14),
+        0 0.45em 0.55em rgba(0,0,0,0.55);
+    display: inline-block;
+    transition: all var(--dur2) var(--dur2) linear;
+    width: 1.5em; height: 1.5em;
+}
+
+form label:first-of-type {
+    background-color: #040;
+    background-image:
+        radial-gradient(0.3em 0.25em at 38% 26%, rgb(255,255,255) 0%, rgba(255,255,255,0) 100%),
+        radial-gradient(0.25em 0.25em at 28% 74%, rgba(255,255,255,0.40), rgba(255,255,255,0)),
+        radial-gradient(0.3em 0.3em at 62% 80%, rgba(255,255,255,0.32), rgba(255,255,255,0)),
+        radial-gradient(100% 100%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.16) 40%, rgba(0,0,0,0.62) 50%);
+    box-shadow:
+        inset 0 0.10em 0.20em rgba(0,0,0,0.82),
+        0 0 0 0.08em rgba(0,0,0,0.68),
+        0 0 0 0.16em rgba(18,28,18,0.78),
+        0 0 0.30em 0.04em rgba(0,90,0,0.14),
+        0 0.45em 0.55em rgba(0,0,0,0.55);
+}
+
+label span { display: inline-block; overflow: hidden; width: 0; }
+
+.lever {
+    transform: rotate(90deg); font-size: 0.7em;
+    background-image:
+        radial-gradient(1em 1.5em at 50% 50%, rgb(185,185,198) 25%, rgb(130,130,142) 49%, rgba(130,130,142,0) 50%),
+        radial-gradient(0.65em 1em at 50% 53%, rgb(12,12,16), rgba(12,12,16,0)),
+        radial-gradient(0.75em 0.75em at 42% 38%, rgb(255,255,255), rgba(255,255,255,0)),
+        radial-gradient(0.5em 0.4em at 43% 56%, rgba(180,180,195,0.45), rgba(180,180,195,0)),
+        radial-gradient(0.5em 0.4em at 55% 57%, rgba(160,160,175,0.35), rgba(160,160,175,0)),
+        radial-gradient(0.5em 0.4em at 50% 60%, rgba(140,140,155,0.28), rgba(140,140,155,0)),
+        radial-gradient(100% 100% at 50% 50%,
+            rgb(165,165,178), rgb(105,105,118) 10%,
+            rgb(4,4,8) 16%, rgb(4,4,8) 17%, rgb(6,6,10) 18%, rgb(6,6,10) 21%,
+            rgb(88,88,100) 21.5%, rgb(88,88,100) 23%,
+            rgb(4,4,8) 23.2%, rgb(4,4,8) 23.8%,
+            rgba(80,80,92,0) 24.5%, rgba(130,130,142,0) 28%,
+            rgb(142,142,154) 30%, rgb(142,142,154) 32%,
+            rgb(5,5,9) 32.5%, rgb(5,5,9) 33.2%,
+            rgb(22,22,32) 33.5%, rgb(22,22,32) 35%,
+            rgba(22,22,32,0) 35.5%, rgba(120,120,132,0) 39.5%,
+            rgb(128,128,140) 41%, rgb(138,138,150) 44%,
+            rgb(5,5,9) 44.5%, rgb(5,5,9) 45%,
+            rgb(16,16,24) 45.5%, rgb(16,16,24) 49%,
+            rgba(16,16,24,0) 50%),
+        radial-gradient(1em 1em at 34% 20%, rgba(255,255,255,0.80), rgba(255,255,255,0) 1em),
+        radial-gradient(0.7em 0.7em at 66% 82%, rgba(255,255,255,0.14), rgba(255,255,255,0) 0.7em),
+        radial-gradient(0.8em 0.8em at 80% 34%, rgba(255,255,255,0.10), rgba(255,255,255,0) 0.8em),
+        radial-gradient(0.6em 0.6em at 20% 66%, rgba(255,255,255,0.08), rgba(255,255,255,0) 0.6em),
+        radial-gradient(100% 100% at center, rgb(72,72,84) 49%, rgba(72,72,84,0) 50%);
+    background-position: 0.5em 0, 0.5em 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+    border-radius: 50%;
+    box-shadow:
+        inset 0 0.10em 0 rgba(255,255,255,0.22),
+        inset 0.10em 0 0 rgba(255,255,255,0.12),
+        inset 0 -0.10em 0 rgba(0,0,0,0.55),
+        inset -0.10em 0 0 rgba(0,0,0,0.42),
+        inset 0.6em 0.6em 1.4em rgba(0,0,0,0.18),
+        inset -0.8em -0.8em 2.0em rgba(0,0,0,0.60),
+        inset 0 0 3.5em rgba(0,0,0,0.38),
+        0 1.5em 1.8em rgba(0,0,0,0.70),
+        0 3.0em 3.5em rgba(0,0,0,0.46),
+        0 5.0em 6.0em rgba(0,0,0,0.28),
+        0 8.0em 10em rgba(0,0,0,0.14);
+    cursor: pointer; font-size: 1em; display: block; outline: 0;
+    position: relative; width: 12em; height: 12em;
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    transition: background-position var(--dur) linear, box-shadow var(--dur2) ease;
+}
+
+.lever:checked {
+    background-position: -0.5em 0, -0.5em 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+    box-shadow:
+        inset 0 0.10em 0 rgba(255,255,255,0.22),
+        inset 0.10em 0 0 rgba(255,255,255,0.12),
+        inset 0 -0.10em 0 rgba(0,0,0,0.55),
+        inset -0.10em 0 0 rgba(0,0,0,0.42),
+        inset 0.6em 0.6em 1.4em rgba(0,0,0,0.18),
+        inset -0.8em -0.8em 2.0em rgba(0,0,0,0.60),
+        inset 0 0 3.5em rgba(0,0,0,0.38),
+        inset -5.70em 0 0.8em -5.55em rgba(40,240,70,0.80),
+        inset -5.85em 0 1.5em -5.70em rgba(20,200,50,0.36),
+        inset -5.30em 0 0.4em -5.22em rgba(120,255,140,0.65),
+        0 1.5em 1.8em rgba(0,0,0,0.70),
+        0 3.0em 3.5em rgba(0,0,0,0.46),
+        0 5.0em 6.0em rgba(0,0,0,0.28),
+        0 8.0em 10em rgba(0,0,0,0.14);
+}
+
+.lever:before, .lever:after { content: ""; display: block; position: absolute; top: 50%; left: 50%; }
+
+.lever:before {
+    animation: leverAOff var(--dur) linear forwards;
+    background:
+        radial-gradient(42% 32% at 36% 26%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.40) 35%, rgba(255,255,255,0) 70%),
+        radial-gradient(18% 55% at 8% 50%, rgba(210,210,225,0.55) 0%, rgba(210,210,225,0) 100%),
+        radial-gradient(55% 14% at 50% 4%, rgba(200,200,218,0.42) 0%, rgba(200,200,218,0) 100%),
+        radial-gradient(0.9em 0.9em at 58% 60%, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%),
+        radial-gradient(1.2em 0.9em at 68% 78%, rgba(8,8,12,0.85) 0%, rgba(8,8,12,0) 100%),
+        radial-gradient(100% 100% at center, rgb(92,92,106) 0%, rgb(68,68,80) 28%, rgb(38,38,48) 52%, rgb(18,18,24) 49.5%, rgba(18,18,24,0) 50%);
+    box-shadow:
+        -2em 4em 1.5em rgba(0,0,0,0.50), -2em 5em 3.5em rgba(0,0,0,0.32),
+        -2em 7em 4em rgba(0,0,0,0.24), -2em 9em 4em rgba(0,0,0,0.18), -2em 11em 4em rgba(0,0,0,0.12),
+        inset 0.3em 0.3em 0.6em rgba(0,0,0,0.55), inset -0.2em -0.2em 0.4em rgba(255,255,255,0.06);
+    border-radius: 50%; width: 4em; height: 4em;
+    transform: translate(100%,-50%); z-index: 1;
+}
+
+.lever:checked:before { animation: leverAOn var(--dur) linear forwards; }
+
+.lever:after {
+    animation: leverBOff var(--dur) linear forwards;
+    background: linear-gradient(180deg, #181820 0%, #0e0e14 100%);
+    border-radius: 15em;
+    box-shadow:
+        inset 0 0.12em 0.22em rgba(0,0,0,1),
+        inset 0 0.28em 0.55em rgba(0,0,0,0.95),
+        inset 0 0.55em 1.10em rgba(0,0,0,0.82),
+        inset 0 0.85em 1.60em rgba(0,0,0,0.62),
+        inset 0 0 0.70em rgba(0,0,0,0.90),
+        0 -0.05em 0 rgba(255,255,255,0.07),
+        0 0.05em 0 rgba(0,0,0,0.55);
+    width: 7.5em; height: 4em; transform: translate(0.5em,-50%);
+}
+
+.lever:checked:after { animation: leverBOn var(--dur) linear forwards; }
+
+.lever:checked + label {
+    background-color: #0d0;
+    background-image:
+        radial-gradient(0.3em 0.25em at 38% 26%, rgb(255,255,255) 0%, rgba(255,255,255,0) 100%),
+        radial-gradient(0.25em 0.25em at 28% 74%, rgba(255,255,255,0.52), rgba(255,255,255,0)),
+        radial-gradient(0.3em 0.3em at 62% 80%, rgba(255,255,255,0.44), rgba(255,255,255,0)),
+        radial-gradient(100% 100%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.26) 40%, rgba(0,0,0,0.52) 50%);
+    box-shadow:
+        inset 0 0.10em 0.20em rgba(0,0,0,0.60),
+        0 0 0 0.08em rgba(0,0,0,0.65),
+        0 0 0 0.16em rgba(18,36,18,0.75),
+        0 0 0.55em 0.08em rgba(0,255,30,0.82),
+        0 0 1.10em 0.20em rgba(0,220,20,0.60),
+        0 0 2.20em 0.38em rgba(0,180,10,0.36),
+        0 0 3.60em 0.58em rgba(0,150,0,0.18),
+        0 0.45em 0.55em rgba(0,0,0,0.50);
+}
+
+.lever:checked + label + label {
+    background-color: #350008;
+    background-image:
+        radial-gradient(0.3em 0.25em at 38% 26%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 100%),
+        radial-gradient(100% 100%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0.72) 50%);
+    box-shadow:
+        inset 0 0.10em 0.22em rgba(0,0,0,0.90),
+        0 0 0 0.08em rgba(0,0,0,0.70),
+        0 0 0 0.16em rgba(28,18,18,0.80),
+        0 0 0.28em 0.04em rgba(100,0,0,0.12),
+        0 0.45em 0.55em rgba(0,0,0,0.55);
+}
+
+.pristine:before, .pristine:after { animation: none; }
+
+@keyframes leverAOn {
+    from { box-shadow: -2em 4em 2em rgba(0,0,0,0.3), -2em 5em 4em rgba(0,0,0,0.2), -2em 7em 4em rgba(0,0,0,0.2), -2em 9em 4em rgba(0,0,0,0.2), -2em 11em 4em rgba(0,0,0,0.2); transform: translate(100%,-50%); }
+    50% { box-shadow: 0 6em 2em rgba(0,0,0,0.3), 0 5em 4em rgba(0,0,0,0.2), 0 7em 4em rgba(0,0,0,0.2), 0 9em 4em rgba(0,0,0,0.2), 0 11em 4em rgba(0,0,0,0.2); }
+    to { box-shadow: 2em 4em 2em rgba(0,0,0,0.3), 2em 5em 4em rgba(0,0,0,0.2), 2em 7em 4em rgba(0,0,0,0.2), 2em 9em 4em rgba(0,0,0,0.2), 2em 11em 4em rgba(0,0,0,0.2); transform: translate(-200%,-50%); }
+}
+@keyframes leverAOff {
+    from { box-shadow: 2em 4em 2em rgba(0,0,0,0.3), 2em 5em 4em rgba(0,0,0,0.2), 2em 7em 4em rgba(0,0,0,0.2), 2em 9em 4em rgba(0,0,0,0.2), 2em 11em 4em rgba(0,0,0,0.2); transform: translate(-200%,-50%); }
+    50% { box-shadow: 0 6em 2em rgba(0,0,0,0.3), 0 5em 4em rgba(0,0,0,0.2), 0 7em 4em rgba(0,0,0,0.2), 0 9em 4em rgba(0,0,0,0.2), 0 11em 4em rgba(0,0,0,0.2); }
+    to { box-shadow: -2em 4em 2em rgba(0,0,0,0.3), -2em 5em 4em rgba(0,0,0,0.2), -2em 7em 4em rgba(0,0,0,0.2), -2em 9em 4em rgba(0,0,0,0.2), -2em 11em 4em rgba(0,0,0,0.2); transform: translate(100%,-50%); }
+}
+@keyframes leverBOn {
+    from { width: 7.5em; transform: translate(0.5em,-50%); }
+    50% { width: 4em; transform: translate(-50%,-50%); }
+    to { width: 7.5em; transform: translate(-8em,-50%); }
+}
+@keyframes leverBOff {
+    from { width: 7.5em; transform: translate(-8em,-50%); }
+    50% { width: 4em; transform: translate(-50%,-50%); }
+    to { width: 7.5em; transform: translate(0.5em,-50%); }
+}
+</style>
+</head>
+<body>
+<form>
+    <div style="order:1; font-family: 'Courier New', monospace; font-size: 0.82em; font-weight: 900; letter-spacing: 0.32em; text-transform: uppercase; text-shadow: 0 1px 0 rgba(255,255,255,0.18), 0 2px 1px rgba(255,255,255,0.08), 0 -1px 0 rgba(0,0,0,0.92), 0 -2px 2px rgba(0,0,0,0.75); color: rgba(72,72,88,1); user-select:none;">ENABLE</div>
+    <input type="checkbox" name="lever" class="lever pristine" id="lever" value="lever value" role="switch" aria-label="lever" aria-checked="false" style="order:2;">
+    <label for="lever" style="order:3"><span>On</span></label>
+
+    <!-- SVG Screws (4 corners) -->
+    <svg style="position:absolute;top:8px;left:8px;width:22px;height:22px;overflow:visible;pointer-events:none;" viewBox="0 0 22 22">
+        <defs><radialGradient id="sg_tl" cx="30%" cy="26%" r="68%"><stop offset="0%" stop-color="#909098"/><stop offset="30%" stop-color="#5e5e6e"/><stop offset="65%" stop-color="#38384a"/><stop offset="100%" stop-color="#1c1c2c"/></radialGradient><filter id="sf_tl" x="-90%" y="-90%" width="280%" height="280%"><feDropShadow dx="2.5" dy="3.5" stdDeviation="2.8" flood-color="rgba(0,0,0,0.88)"/></filter></defs>
+        <g filter="url(#sf_tl)"><circle cx="11" cy="11" r="8" fill="#0b0b18"/><circle cx="12" cy="12.5" r="7.4" fill="rgba(0,0,0,0.40)"/><circle cx="11" cy="11" r="7" fill="url(#sg_tl)"/><path d="M15.9 15.9 A7 7 0 1 1 15.9 6.1" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.2"/><path d="M6.1 6.1 A7 7 0 0 1 15.9 6.1" fill="none" stroke="rgba(255,255,255,0.20)" stroke-width="0.7"/><rect x="10.15" y="4.8" width="1.7" height="12.4" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="4.8" y="10.15" width="12.4" height="1.7" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="10.65" y="5.0" width="0.6" height="5.5" rx="0.3" fill="rgba(255,255,255,0.10)"/><ellipse cx="8.5" cy="8.2" rx="2.8" ry="1.7" fill="rgba(255,255,255,0.30)" transform="rotate(-38,8.5,8.2)"/><circle cx="7.8" cy="7.6" r="1.0" fill="rgba(255,255,255,0.54)"/></g>
+    </svg>
+    <svg style="position:absolute;top:8px;right:8px;width:22px;height:22px;overflow:visible;pointer-events:none;" viewBox="0 0 22 22">
+        <defs><radialGradient id="sg_tr" cx="30%" cy="26%" r="68%"><stop offset="0%" stop-color="#909098"/><stop offset="30%" stop-color="#5e5e6e"/><stop offset="65%" stop-color="#38384a"/><stop offset="100%" stop-color="#1c1c2c"/></radialGradient><filter id="sf_tr" x="-90%" y="-90%" width="280%" height="280%"><feDropShadow dx="2.5" dy="3.5" stdDeviation="2.8" flood-color="rgba(0,0,0,0.88)"/></filter></defs>
+        <g filter="url(#sf_tr)"><circle cx="11" cy="11" r="8" fill="#0b0b18"/><circle cx="12" cy="12.5" r="7.4" fill="rgba(0,0,0,0.40)"/><circle cx="11" cy="11" r="7" fill="url(#sg_tr)"/><path d="M15.9 15.9 A7 7 0 1 1 15.9 6.1" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.2"/><path d="M6.1 6.1 A7 7 0 0 1 15.9 6.1" fill="none" stroke="rgba(255,255,255,0.20)" stroke-width="0.7"/><rect x="10.15" y="4.8" width="1.7" height="12.4" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="4.8" y="10.15" width="12.4" height="1.7" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="10.65" y="5.0" width="0.6" height="5.5" rx="0.3" fill="rgba(255,255,255,0.10)"/><ellipse cx="8.5" cy="8.2" rx="2.8" ry="1.7" fill="rgba(255,255,255,0.30)" transform="rotate(-38,8.5,8.2)"/><circle cx="7.8" cy="7.6" r="1.0" fill="rgba(255,255,255,0.54)"/></g>
+    </svg>
+    <svg style="position:absolute;bottom:8px;left:8px;width:22px;height:22px;overflow:visible;pointer-events:none;" viewBox="0 0 22 22">
+        <defs><radialGradient id="sg_bl" cx="30%" cy="26%" r="68%"><stop offset="0%" stop-color="#909098"/><stop offset="30%" stop-color="#5e5e6e"/><stop offset="65%" stop-color="#38384a"/><stop offset="100%" stop-color="#1c1c2c"/></radialGradient><filter id="sf_bl" x="-90%" y="-90%" width="280%" height="280%"><feDropShadow dx="2.5" dy="3.5" stdDeviation="2.8" flood-color="rgba(0,0,0,0.88)"/></filter></defs>
+        <g filter="url(#sf_bl)"><circle cx="11" cy="11" r="8" fill="#0b0b18"/><circle cx="12" cy="12.5" r="7.4" fill="rgba(0,0,0,0.40)"/><circle cx="11" cy="11" r="7" fill="url(#sg_bl)"/><path d="M15.9 15.9 A7 7 0 1 1 15.9 6.1" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.2"/><path d="M6.1 6.1 A7 7 0 0 1 15.9 6.1" fill="none" stroke="rgba(255,255,255,0.20)" stroke-width="0.7"/><rect x="10.15" y="4.8" width="1.7" height="12.4" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="4.8" y="10.15" width="12.4" height="1.7" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="10.65" y="5.0" width="0.6" height="5.5" rx="0.3" fill="rgba(255,255,255,0.10)"/><ellipse cx="8.5" cy="8.2" rx="2.8" ry="1.7" fill="rgba(255,255,255,0.30)" transform="rotate(-38,8.5,8.2)"/><circle cx="7.8" cy="7.6" r="1.0" fill="rgba(255,255,255,0.54)"/></g>
+    </svg>
+    <svg style="position:absolute;bottom:8px;right:8px;width:22px;height:22px;overflow:visible;pointer-events:none;" viewBox="0 0 22 22">
+        <defs><radialGradient id="sg_br" cx="30%" cy="26%" r="68%"><stop offset="0%" stop-color="#909098"/><stop offset="30%" stop-color="#5e5e6e"/><stop offset="65%" stop-color="#38384a"/><stop offset="100%" stop-color="#1c1c2c"/></radialGradient><filter id="sf_br" x="-90%" y="-90%" width="280%" height="280%"><feDropShadow dx="2.5" dy="3.5" stdDeviation="2.8" flood-color="rgba(0,0,0,0.88)"/></filter></defs>
+        <g filter="url(#sf_br)"><circle cx="11" cy="11" r="8" fill="#0b0b18"/><circle cx="12" cy="12.5" r="7.4" fill="rgba(0,0,0,0.40)"/><circle cx="11" cy="11" r="7" fill="url(#sg_br)"/><path d="M15.9 15.9 A7 7 0 1 1 15.9 6.1" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.2"/><path d="M6.1 6.1 A7 7 0 0 1 15.9 6.1" fill="none" stroke="rgba(255,255,255,0.20)" stroke-width="0.7"/><rect x="10.15" y="4.8" width="1.7" height="12.4" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="4.8" y="10.15" width="12.4" height="1.7" rx="0.6" fill="rgba(0,0,0,0.64)"/><rect x="10.65" y="5.0" width="0.6" height="5.5" rx="0.3" fill="rgba(255,255,255,0.10)"/><ellipse cx="8.5" cy="8.2" rx="2.8" ry="1.7" fill="rgba(255,255,255,0.30)" transform="rotate(-38,8.5,8.2)"/><circle cx="7.8" cy="7.6" r="1.0" fill="rgba(255,255,255,0.54)"/></g>
+    </svg>
+</form>
+<script>
+document.querySelector(".lever").addEventListener("change", function(){
+    this.classList.remove("pristine");
+    let ac = "aria-checked";
+    this.setAttribute(ac, this.getAttribute(ac) == "true" ? "false" : "true");
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!--
+  Neumorphic Progress Loader (light/dark)
+  Source: Codepen
+  Key techniques:
+    - CSS custom property --progress (0→1) drives conic-gradient fill
+    - Triple-ring construction: outer shell → gradient fill → glow layer → inner well
+    - Neumorphic dual-shadow on outer (inset highlight + cast shadow pair)
+    - Conic-gradient with dynamic lightness: hsl l% = calc(85% - 35% * var(--progress))
+    - Fill glow layer: blurred duplicate of gradient at -0.25em inset for soft halo
+    - Inner well: dual-layer (outer sphere shadow + inner concave surface)
+    - Dark theme via prefers-color-scheme with adjusted shadow intensities
+    - JS class-based loader with replay functionality
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neumorphic Progress Loader</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Play:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { border: 0; box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --hue: 223;
+  --bg: hsl(var(--hue),10%,90%);
+  --fg: hsl(var(--hue),10%,10%);
+  --primary: hsl(var(--hue),90%,50%);
+  --trans-dur: 0.3s;
+  font-size: clamp(16px, calc(16px + (32 - 16) * (100vw - 320px) / (2560 - 320)), 32px);
+}
+
+body, button { font: 1em/1.5 "DM Sans", sans-serif; }
+body {
+  background-color: var(--bg);
+  background-image: linear-gradient(145deg, hsla(var(--hue),10%,10%,0), hsla(var(--hue),10%,10%,0.15));
+  color: var(--fg);
+  display: flex;
+  height: 100vh;
+  min-height: 23em;
+  transition: background-color var(--trans-dur), color var(--trans-dur);
+  user-select: none;
+}
+
+button {
+  background-color: var(--primary);
+  border-radius: 0.2em;
+  color: hsl(0,0%,100%);
+  display: block;
+  margin: 1.5em auto 0 auto;
+  padding: 0.5em 1em;
+  cursor: pointer;
+  outline: transparent;
+  transition: background-color 0.15s linear;
+  -webkit-tap-highlight-color: transparent;
+}
+button:hover, button:focus-visible {
+  background-color: hsl(var(--hue),90%,30%);
+}
+
+main { margin: auto; }
+
+/* ═══ SHARED BORDER-RADIUS ════════════════════════════════════════════════ */
+.loader,
+.loader__fill,
+.loader__fill:before,
+.loader__fill-glow,
+.loader__middle,
+.loader__middle:before { border-radius: 50%; }
+
+/* ═══ OUTER SHELL — neumorphic ring container ═════════════════════════════
+   Three shadows:
+   1. Inset highlight (top-left light catch)
+   2. Cast shadow (bottom-right dark)
+   3. Ambient light (top-left bright)
+   ═════════════════════════════════════════════════════════════════════════ */
+.loader {
+  --progress: 0;
+  --angle: calc(360deg * var(--progress));
+  background-color: hsl(var(--hue),10%,90%);
+  background-image: linear-gradient(145deg, hsla(var(--hue),10%,10%,0.1), hsla(var(--hue),10%,10%,0));
+  box-shadow:
+    0.25em 0.25em 0.5em hsl(var(--hue),10%,75%) inset,
+    0.5em 0.5em 1.5em hsl(var(--hue),10%,70%),
+    -0.5em -0.5em 1.5em hsl(var(--hue),10%,100%);
+  font-family: Play, sans-serif;
+  position: relative;
+  width: 12em; height: 12em;
+  transition: background-color var(--trans-dur), box-shadow var(--trans-dur);
+}
+
+.loader[data-running="true"] + button { visibility: hidden; }
+
+/* ═══ FILL RING — conic-gradient progress arc ═════════════════════════════
+   Dynamic lightness: starts light (85%), darkens to 50% as progress → 1.
+   The arc terminates sharply at --angle with transparent falloff.
+   1px blur softens the gradient edge for anti-aliasing.
+   ═════════════════════════════════════════════════════════════════════════ */
+.loader__fill {
+  background-image:
+    conic-gradient(
+      hsl(var(--hue),90%,85%),
+      hsl(var(--hue),90%,calc(85% - 35% * var(--progress))) var(--angle),
+      hsla(var(--hue),90%,calc(85% - 35% * var(--progress)),0) var(--angle)
+    );
+  filter: blur(1px);
+  width: 100%; height: 100%;
+}
+
+.loader__fill,
+.loader__fill:before,
+.loader__fill-glow,
+.loader__middle,
+.loader__middle:before,
+.loader__value { position: absolute; }
+
+/* Brighter inner ring (slightly inset) */
+.loader__fill:before,
+.loader__fill-glow {
+  background-image:
+    conic-gradient(
+      hsl(var(--hue),90%,90%),
+      hsl(var(--hue),90%,calc(90% - 40% * var(--progress))) var(--angle),
+      hsla(var(--hue),90%,calc(90% - 40% * var(--progress)),0) var(--angle)
+    );
+}
+.loader__fill:before {
+  content: "";
+  display: block;
+  inset: 0.25em;
+}
+
+/* ═══ GLOW LAYER — soft halo behind the fill ══════════════════════════════
+   Blurred duplicate of the fill gradient, extended outward (-0.25em inset).
+   Creates the "light bleeding out" effect around the progress arc.
+   ═════════════════════════════════════════════════════════════════════════ */
+.loader__fill-glow {
+  filter: blur(4px);
+  opacity: 0.5;
+  inset: -0.25em;
+}
+
+/* ═══ INNER WELL — concave center display ═════════════════════════════════
+   Outer layer: sphere shadow via box-shadow (dark cast)
+   Inner layer (::before): concave surface with subtle gradient
+   Creates the "sunken display" look for the percentage readout.
+   ═════════════════════════════════════════════════════════════════════════ */
+.loader__middle,
+.loader__middle:before { transition: background-color var(--trans-dur); }
+
+.loader__middle {
+  background-color: hsl(var(--hue),10%,100%);
+  background-image: linear-gradient(145deg, hsla(var(--hue),10%,10%,0), hsla(var(--hue),10%,10%,0.7));
+  box-shadow: 0.5em 0.5em 1em hsla(var(--hue),10%,10%,0.5);
+  inset: 1.5em;
+  z-index: 1;
+}
+.loader__middle:before {
+  background-color: hsl(var(--hue),10%,90%);
+  background-image: linear-gradient(145deg, hsla(var(--hue),10%,10%,0.1), hsla(var(--hue),10%,10%,0));
+  content: "";
+  display: block;
+  inset: 0.25em;
+}
+
+/* ═══ VALUE TEXT — centered percentage ════════════════════════════════════ */
+.loader__value {
+  font-size: 2.5em;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  inset: 0;
+  text-shadow: 0 0.25rem 0.25rem hsla(var(--hue),10%,50%,0.4);
+  transition: text-shadow var(--trans-dur);
+}
+
+/* ═══ DARK THEME ══════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: hsl(var(--hue),10%,30%);
+    --fg: hsl(var(--hue),10%,90%);
+  }
+  .loader {
+    background-color: hsl(var(--hue),10%,30%);
+    box-shadow:
+      0.25em 0.25em 0.5em hsl(var(--hue),10%,15%) inset,
+      0.5em 0.5em 1.5em hsl(var(--hue),10%,20%),
+      -0.5em -0.5em 1.5em hsl(var(--hue),10%,40%);
+  }
+  .loader__middle { background-color: hsl(var(--hue),10%,40%); }
+  .loader__middle:before { background-color: hsl(var(--hue),10%,30%); }
+  .loader__value { text-shadow: 0 0.25rem 0.25rem hsla(var(--hue),10%,0%,0.4); }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <div class="loader" data-running="true">
+    <div class="loader__fill-glow"></div>
+    <div class="loader__fill"></div>
+    <div class="loader__middle">
+      <div class="loader__value">
+        <div data-value>0%</div>
+      </div>
+    </div>
+  </div>
+  <button type="button">Replay</button>
+</main>
+
+<script>
+class Loader {
+  progress = 0;
+  progressLoop = null;
+
+  constructor(el) {
+    this.el = document.querySelector(el);
+    this.init();
+  }
+
+  init() {
+    this.progress = 0;
+    this.updateDisplay();
+    clearTimeout(this.progressLoop);
+    this.progressLoop = setTimeout(this.progressInc.bind(this), 600);
+  }
+
+  progressInc() {
+    this.progress += 0.01;
+    this.progress = +this.progress.toFixed(2);
+    this.updateDisplay();
+    clearTimeout(this.progressLoop);
+    if (this.progress < 1) {
+      this.progressLoop = setTimeout(this.progressInc.bind(this), 20);
+    }
+  }
+
+  updateDisplay() {
+    this.el.setAttribute("data-running", this.progress < 1);
+    const value = this.el?.querySelector("[data-value]");
+    if (value) value.innerText = `${Math.round(this.progress * 100)}%`;
+    this.el.style.setProperty("--progress", this.progress);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const l = new Loader(".loader");
+  document.querySelector("button")?.addEventListener("click", l.init.bind(l));
+});
+</script>
+
+</body>
+</html>

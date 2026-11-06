@@ -1,0 +1,190 @@
+<!--
+  Rimlight Toggle Switch
+  Source: Codepen — inspired by dribbble.com/shots/2311766-On-and-off
+  Key techniques:
+    - Rimlight halo via ::before pseudo-element with box-shadow glow behind the handle
+    - ON text with 5-layer text-shadow (white core → saturated → hue-shifted spread)
+    - Grip dots grid (3×5) with micro bi-directional shadows
+    - Cubic-bezier (.55, 0, .3, 1) for physical inertia feel
+    - CSS-only checkbox toggle (no JS needed)
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rimlight Toggle Switch</title>
+<style>
+*, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: #1c2326;
+  user-select: none;
+}
+
+/* ═══ VARIABLES ═══════════════════════════════════════════════════════════ */
+:root {
+  --color: #2481D4;
+  --bg: #1c2326;
+  --groupH: 50px;
+  --groupW: 200px;
+  --border: 5px;
+  --dur: 0.3s;
+  --dur2: 0.15s;
+}
+
+/* ═══ PANEL — outer track housing ═════════════════════════════════════════ */
+.checkboxGroup {
+  height: var(--groupH);
+  width: var(--groupW);
+  position: relative;
+  background: hsl(200, 5%, 8%);
+  border-radius: calc(var(--groupH) / 2);
+  box-shadow: inset 0px 1px 1px rgba(0,0,0,0.1),
+              0px 1px 0px rgba(255,255,255,0.1);
+}
+
+/* Inner colored track
+   WARNING: z-index:-2 requires no stacking context on ancestors.
+   If adapted into a React component inside a parent with transform/opacity/will-change,
+   negative z-indices will clip below the parent. Use isolation:isolate on wrapper instead. */
+.innerBorder {
+  background-image: linear-gradient(to right, hsl(200, 5%, 10%) 99px, hsl(207, 70%, 35%) 100px);
+  height: calc(var(--groupH) - var(--border) * 2);
+  width: calc(var(--groupW) - var(--border) * 2);
+  position: absolute;
+  top: var(--border);
+  left: var(--border);
+  border-radius: calc(var(--groupH) / 2);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.1),
+              inset 0 5px 5px rgba(0,0,0,0.2),
+              0 1px 0 rgba(255,255,255,0.1);
+  z-index: -2;
+}
+
+/* OFF label */
+.checkboxGroup::after {
+  content: 'OFF';
+  color: hsl(200, 5%, 16%);
+  position: absolute;
+  left: calc(var(--groupW) / 7);
+  z-index: -1;
+  font: 16px Arial, sans-serif;
+  line-height: var(--groupH);
+  font-weight: 100;
+  text-shadow: 1px 1px 0px rgba(0,0,0,.15);
+}
+
+/* ON label — 5-layer glow text-shadow */
+.checkboxGroup::before {
+  content: 'ON';
+  color: hsl(207, 80%, 70%);
+  text-shadow: 0 0 40px hsl(207, 70%, 55%),
+               0 0 30px hsl(207, 100%, 52%),
+               0 0 30px hsl(192, 90%, 45%),
+               0 0 30px hsl(192, 90%, 45%),
+               0 0 10px white;
+  position: absolute;
+  right: calc(var(--groupW) / 6);
+  z-index: 0;
+  font: 16px Arial, sans-serif;
+  line-height: var(--groupH);
+  font-weight: 500;
+}
+
+/* ═══ CHECKBOX (hidden) ══════════════════════════════════════════════════ */
+input[type=checkbox] {
+  visibility: hidden;
+  position: absolute;
+}
+
+/* ═══ HANDLE — sliding knob with grip dots ════════════════════════════════ */
+label {
+  cursor: pointer;
+  position: absolute;
+  top: calc(var(--border) - 2px);
+  left: calc(var(--border) - 2px);
+  display: block;
+  width: calc(var(--groupW) * 0.6);
+  height: calc(var(--groupH) - var(--border) * 2 + 4px);
+  background: linear-gradient(to bottom, hsl(200, 5%, 18%) 0%, var(--bg) 100%);
+  border-radius: calc(var(--groupH) / 2);
+  transition: all 0.4s cubic-bezier(.55, 0, .3, 1);
+  box-shadow: inset 0px -2px 0px rgba(0,0,0,0.1),
+              inset 0px 2px 0px rgba(255,255,255,0.1),
+              inset -1px 0 0 var(--color),
+              0 5px 10px black;
+}
+
+/* ═══ RIMLIGHT — the key technique ════════════════════════════════════════
+   ::before creates a colored glow strip BEHIND the handle.
+   When the checkbox slides right, the glow reveals on the left side.
+   box-shadow with saturated color creates the rim light effect.
+   ═════════════════════════════════════════════════════════════════════════ */
+label::before {
+  background-image: linear-gradient(to bottom, hsl(207, 70%, 25%) 0%, hsl(197, 80%, 55%) 80%);
+  content: '';
+  height: calc(var(--groupH) - var(--border) * 2);
+  width: calc(var(--groupW) * 0.4 + var(--groupH) / 2);
+  border-top-right-radius: calc(var(--groupH) / 2);
+  border-bottom-right-radius: calc(var(--groupH) / 2);
+  box-shadow: 0 3px 20px hsla(207, 100%, 52%, 0.8);
+  top: 2px;
+  right: calc(var(--groupW) * -0.4 + var(--border) + 3px);
+  position: absolute;
+  z-index: -1;
+  transition: all 0.4s cubic-bezier(.55, 0, .3, 1), box-shadow 0.4s cubic-bezier(0, 0, 0, 1);
+}
+
+/* ═══ GRIP DOTS — 3×5 grid with micro shadows ════════════════════════════ */
+.dotContainer {
+  position: relative;
+  top: 50%;
+  transform: translateY(-50%);
+  border-spacing: 6px;
+  display: table;
+  margin: auto;
+}
+.dotRow { display: table-row; }
+.dot {
+  display: table-cell;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, hsl(200, 5%, 18%) 0%, var(--bg) 100%);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.3), 0 -1px 0 rgba(255,255,255,0.1);
+}
+
+/* ═══ CHECKED STATE — handle slides right, rimlight reveals ══════════════ */
+input[type=checkbox]:checked + label {
+  left: calc(var(--groupW) * 0.4 - var(--border) + 2px);
+  transition: all 0.4s cubic-bezier(.55, 0, .3, 1), box-shadow 0.43s cubic-bezier(1, 0, 1, 1);
+  box-shadow: inset 0px -2px 0px rgba(0,0,0,0.1),
+              inset 0px 2px 0px rgba(255,255,255,0.1),
+              inset -1px 0 1px 0,
+              0 5px 10px black;
+}
+input[type=checkbox]:checked + label::before {
+  width: var(--groupH);
+  right: 2px;
+  box-shadow: 0 0 10px 0;
+  transition: all 0.4s cubic-bezier(.55, 0, .3, 1), box-shadow 0.43s cubic-bezier(1, 0, 1, 1);
+}
+</style>
+</head>
+<body>
+
+<div class="checkboxGroup">
+  <div class="innerBorder"></div>
+  <input type="checkbox" id="check">
+  <label for="check">
+    <div class="dotContainer">
+      <div class="dotRow"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="dotRow"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="dotRow"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+  </label>
+</div>
+
+</body>
+</html>

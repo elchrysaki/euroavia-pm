@@ -1,0 +1,249 @@
+<!--
+  Color-Mix Skeuomorphic Buttons
+  Source: Codepen
+  Key techniques:
+    - CSS color-mix(in lch) for dynamic light/dark variants from a single --button-color
+    - 3-layer construction: ::before (black base shadow), ::after (gradient side), face (convex dome)
+    - Physical press: top:-5px rest → top:0 pressed, pseudo-elements translate(0,5px) → translate(0)
+    - Radial gradient at 30% 30% for off-center specular highlight
+    - Text engraving via dual text-shadow (dark above, light below)
+    - Includes: rectangle, circle, LED, label, and slider variants
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color-Mix Skeuomorphic Buttons</title>
+<style>
+:root {
+  --color-100: #ff611a;
+  --color-200: #f5f5f5;
+  --color-300: #333333;
+  --color-400: #222222;
+}
+
+* { font-family: monospace; text-transform: uppercase; box-sizing: border-box; }
+
+/* ═══ BASE BUTTON — 3-layer physical construction ═════════════════════════
+   Layer 1 (::before) — Black base plate, creates the "pit" the button sits in
+   Layer 2 (::after)  — Gradient side wall, the button's visible edge/thickness
+   Layer 3 (element)  — Convex dome face with specular highlight
+   Press action: all 3 layers collapse via translate + top change
+   ═════════════════════════════════════════════════════════════════════════ */
+button {
+  display: block;
+  position: relative;
+  border: none;
+  background-color: var(--button-color);
+  background-image:
+    radial-gradient(circle at 30% 30%, color-mix(in lch, var(--button-color), black 15%), transparent 120%);
+  box-shadow:
+    inset 0 0 2px 1px color-mix(in lch, var(--button-color), black 30%),
+    inset 0 0 3px 2px color-mix(in lch, var(--button-color), white 50%),
+    inset -4px -4px 10px color-mix(in lch, var(--button-color), white 25%);
+  transition: all .2s ease-in-out;
+  padding: 1rem 2rem;
+  top: -5px;
+  color: white;
+  text-shadow:
+    -1px -1px 1px color-mix(in lch, var(--button-color), black 50%),
+    1px 1px 1px color-mix(in lch, var(--button-color), white 50%),
+    0 0 0 color-mix(in lch, var(--button-color), white 0%);
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
+/* Layer 1 — black base shadow */
+button::before {
+  content: '';
+  display: block;
+  position: absolute;
+  z-index: -2;
+  inset: -2px;
+  background-color: black;
+  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.5);
+  translate: 0 5px;
+  transition: all .2s ease-in-out;
+}
+
+/* Layer 2 — gradient side wall */
+button::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: linear-gradient(120deg,
+    color-mix(in lch, var(--button-color), white 30%),
+    color-mix(in lch, var(--button-color), black 50%)
+  );
+  background-size: 110% 110%;
+  background-position: 50% 50%;
+  border: 0 solid transparent;
+  box-shadow: 5px 5px 10px hsla(0, 0%, 0%, 0.3);
+  translate: 0 5px;
+  transition: all .2s ease-in-out;
+}
+
+/* Empty buttons become square pads */
+button:empty { padding: 1.5rem; }
+
+/* Press state — all layers collapse */
+button:hover, button:focus-visible, button:active {
+  box-shadow:
+    inset 0 0 3px 2px color-mix(in lch, var(--button-color), black 50%),
+    inset 0 0 3px 2px color-mix(in lch, var(--button-color), white 20%),
+    inset -4px -4px 10px color-mix(in lch, var(--button-color), white 25%);
+  text-shadow:
+    -1px -1px 1px color-mix(in lch, var(--button-color), black 50%),
+    1px 1px 1px color-mix(in lch, var(--button-color), white 50%),
+    0 0 5px color-mix(in lch, var(--button-color), white 50%);
+  top: 0;
+}
+button:hover::after, button:focus-visible::after, button:active::after {
+  translate: 0;
+  box-shadow: 0 0 0 hsla(0, 0%, 0%, 0.3);
+}
+button:hover::before, button:focus-visible::before, button:active::before {
+  translate: 0;
+}
+
+/* ═══ LABEL — flat variant (no press action) ══════════════════════════════ */
+.label-btn {
+  display: block;
+  position: relative;
+  border: none;
+  background-color: var(--button-color);
+  background-image:
+    radial-gradient(circle at 30% 30%, color-mix(in lch, var(--button-color), black 15%), transparent 120%);
+  padding: 1rem 2rem;
+  color: white;
+  text-shadow:
+    -1px -1px 1px color-mix(in lch, var(--button-color), black 50%),
+    1px 1px 1px color-mix(in lch, var(--button-color), white 50%);
+  cursor: pointer;
+  letter-spacing: 1px;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+.label-btn::before {
+  content: '';
+  display: block;
+  position: absolute;
+  z-index: -2;
+  inset: -2px;
+  background-color: black;
+  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.5);
+}
+
+/* ═══ CIRCLE BUTTON — round variant with full border-radius ═══════════════ */
+button.circle {
+  border-radius: 100vh;
+}
+button.circle::before,
+button.circle::after {
+  border-radius: 100vh;
+}
+
+/* ═══ LED — status indicator (non-interactive) ════════════════════════════ */
+.led {
+  display: block;
+  position: relative;
+  border: none;
+  border-radius: 100vh;
+  background-color: var(--button-color);
+  background-image:
+    radial-gradient(circle at 30% 30%, color-mix(in lch, var(--button-color), black 15%), transparent 120%);
+  box-shadow:
+    inset 0 0 2px 1px color-mix(in lch, var(--button-color), black 30%),
+    inset 0 0 3px 2px color-mix(in lch, var(--button-color), white 50%),
+    inset -4px -4px 10px color-mix(in lch, var(--button-color), white 25%);
+  padding: 1.4rem;
+  cursor: default;
+}
+.led::before {
+  content: '';
+  display: block;
+  position: absolute;
+  z-index: -2;
+  inset: -2px;
+  border-radius: 100vh;
+  background-color: black;
+  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.5);
+}
+
+/* ═══ SLIDER — track + thumb ═════════════════════════════════════════════ */
+.slider-container {
+  margin-top: -5px;
+  display: grid;
+  width: 100px;
+  height: 32px;
+  position: relative;
+  align-items: center;
+}
+.slider-bar {
+  display: block;
+  position: absolute;
+  border: none;
+  background-color: var(--button-color);
+  background-image:
+    radial-gradient(circle at 30% 30%, color-mix(in lch, var(--button-color), black 15%), transparent 120%);
+  height: 8px;
+  width: 100%;
+  cursor: pointer;
+}
+.slider-bar::before {
+  content: '';
+  display: block;
+  position: absolute;
+  z-index: -2;
+  inset: -2px;
+  background-color: black;
+  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.5);
+}
+.slider-container button {
+  width: 20px;
+  height: 32px;
+  padding: 0 !important;
+  position: relative;
+  z-index: 1;
+}
+
+body {
+  background-color: rgb(169, 169, 169);
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+</style>
+</head>
+<body>
+
+  <!-- Rectangle buttons in various colors -->
+  <button style="--button-color: var(--color-100);">BUTTON</button>
+  <button style="--button-color: var(--color-200);"></button>
+  <button style="--button-color: var(--color-300);"></button>
+  <button style="--button-color: rgb(0, 99, 0);"></button>
+
+  <!-- Flat label (no press) -->
+  <div class="label-btn" style="--button-color: rgb(99, 99, 99);">button label</div>
+
+  <!-- Circle button -->
+  <button class="circle" style="--button-color: rgb(215, 0, 0);"></button>
+
+  <!-- LED indicator -->
+  <div class="led" style="--button-color: yellow;"></div>
+
+  <!-- Slider -->
+  <div class="slider-container">
+    <div style="position: absolute; z-index: 0; width: 100%;">
+      <div class="slider-bar" style="--button-color: gray;"></div>
+    </div>
+    <div style="position: absolute; z-index: 1; width: 100%; top: 5px;">
+      <button style="--button-color: silver;"></button>
+    </div>
+  </div>
+
+</body>
+</html>
