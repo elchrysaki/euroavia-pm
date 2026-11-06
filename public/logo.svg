@@ -2,25 +2,32 @@
   <title>EUROAVIA PM</title>
   <defs>
     <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f4f7fb"/>
-      <stop offset=".22" stop-color="#aeb9c7"/>
-      <stop offset=".45" stop-color="#eef2f7"/>
-      <stop offset=".62" stop-color="#7d8a9c"/>
-      <stop offset=".82" stop-color="#d6dde7"/>
-      <stop offset="1" stop-color="#5d6a7c"/>
+      <stop offset="0" stop-color="#f6f8fb"/>
+      <stop offset=".25" stop-color="#b4bfcc"/>
+      <stop offset=".5" stop-color="#eef2f7"/>
+      <stop offset=".7" stop-color="#8794a6"/>
+      <stop offset="1" stop-color="#d9e0e8"/>
     </linearGradient>
     <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#3c4655"/>
+      <stop offset="1" stop-color="#3a4453"/>
     </linearGradient>
-    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#6fb6ff"/>
-      <stop offset=".5" stop-color="#1f5fd6"/>
-      <stop offset="1" stop-color="#0b2f80"/>
+    <!-- polished navy metal for the emblem -->
+    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fa6e0"/>
+      <stop offset=".18" stop-color="#2d5aa8"/>
+      <stop offset=".48" stop-color="#132f6b"/>
+      <stop offset=".55" stop-color="#4f7cc7"/>
+      <stop offset=".8" stop-color="#173a7d"/>
+      <stop offset="1" stop-color="#0a1d47"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#6c7a8e"/>
     </linearGradient>
     <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#c9d3df"/>
+      <stop offset="1" stop-color="#c6d0dc"/>
     </linearGradient>
     <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#4b5666"/>
@@ -28,52 +35,50 @@
       <stop offset="1" stop-color="#4b5666"/>
     </linearGradient>
     <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff" stop-opacity=".75"/>
+      <stop offset="0" stop-color="#fff" stop-opacity=".7"/>
       <stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="4" dy="8" stdDeviation="6" flood-color="#1b2433" flood-opacity=".45"/>
+    </filter>
   </defs>
 
   <!-- brushed-metal tile -->
   <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bezel)"/>
   <rect x="20" y="20" width="472" height="472" rx="102" fill="url(#steel)"/>
 
-  <!-- calendar body -->
-  <rect x="106" y="124" width="300" height="276" rx="34" fill="#2a3340" opacity=".35" transform="translate(6 10)"/>
-  <rect x="106" y="124" width="300" height="276" rx="34" fill="url(#page)" stroke="url(#bezel)" stroke-width="5"/>
-  <path d="M106 158a34 34 0 0 1 34-34h232a34 34 0 0 1 34 34v42H106z" fill="url(#blue)"/>
-  <text x="256" y="182" text-anchor="middle" font-family="Arial Black, Helvetica, sans-serif"
-        font-weight="900" font-size="38" letter-spacing="3" fill="#ffffff">EUROAVIA</text>
-
-  <!-- binder rings -->
-  <rect x="168" y="96" width="22" height="58" rx="11" fill="url(#ring)" stroke="#3c4655" stroke-width="3"/>
-  <rect x="322" y="96" width="22" height="58" rx="11" fill="url(#ring)" stroke="#3c4655" stroke-width="3"/>
-
-  <!-- day grid -->
-  <g fill="#9aa8ba">
-    <rect x="136" y="222" width="46" height="34" rx="8"/>
-    <rect x="194" y="222" width="46" height="34" rx="8"/>
-    <rect x="252" y="222" width="46" height="34" rx="8"/>
-    <rect x="310" y="222" width="46" height="34" rx="8"/>
-    <rect x="136" y="268" width="46" height="34" rx="8"/>
-    <rect x="194" y="268" width="46" height="34" rx="8" fill="url(#blue)"/>
-    <rect x="252" y="268" width="46" height="34" rx="8"/>
-    <rect x="310" y="268" width="46" height="34" rx="8"/>
-    <rect x="136" y="314" width="46" height="34" rx="8"/>
-    <rect x="194" y="314" width="46" height="34" rx="8"/>
-    <rect x="252" y="314" width="46" height="34" rx="8"/>
+  <!-- wing + E emblem, slanted like the original mark -->
+  <g transform="translate(68 6) skewX(-20)" fill="url(#navy)" stroke="url(#edge)" stroke-width="4"
+     stroke-linejoin="round" filter="url(#drop)">
+    <!-- speed-line wings, tapering -->
+    <path d="M40 120 H232 L222 156 H62 Z"/>
+    <path d="M84 178 H222 L212 214 H104 Z"/>
+    <path d="M128 236 H212 L202 272 H146 Z"/>
+    <!-- the E -->
+    <path d="M252 120 H440 L428 166 H306 V212 H408 L398 252 H306 V312 H420 L408 358 H252 Z"/>
   </g>
 
-  <!-- flight path + chrome jet taking off from the calendar -->
-  <path d="M160 360 C 240 360, 300 330, 372 268" fill="none" stroke="#1f5fd6"
-        stroke-width="6" stroke-linecap="round" stroke-dasharray="2 14"/>
-  <g transform="translate(392 250) rotate(-38)">
-    <path d="M-58 0 L40 -8 Q62 0 40 8 Z" fill="url(#steel)" stroke="#2a3340" stroke-width="3"/>
-    <path d="M-6 -6 L-30 -48 L-14 -48 L22 -6 Z" fill="url(#blue)" stroke="#2a3340" stroke-width="3"/>
-    <path d="M-6 6 L-30 48 L-14 48 L22 6 Z" fill="url(#blue)" stroke="#2a3340" stroke-width="3"/>
-    <path d="M-52 -2 L-66 -24 L-56 -24 L-38 -2 Z" fill="url(#blue)" stroke="#2a3340" stroke-width="3"/>
-    <path d="M-52 2 L-66 24 L-56 24 L-38 2 Z" fill="url(#blue)" stroke="#2a3340" stroke-width="3"/>
+  <!-- calendar badge in the space under the wings -->
+  <g filter="url(#drop)">
+    <rect x="58" y="300" width="176" height="164" rx="26" fill="url(#page)" stroke="url(#edge)" stroke-width="4"/>
+    <path d="M58 326a26 26 0 0 1 26-26h124a26 26 0 0 1 26 26v22H58z" fill="url(#navy)"/>
+    <rect x="96" y="282" width="16" height="40" rx="8" fill="url(#ring)" stroke="#3a4453" stroke-width="2.5"/>
+    <rect x="180" y="282" width="16" height="40" rx="8" fill="url(#ring)" stroke="#3a4453" stroke-width="2.5"/>
+    <g fill="#9aa8ba">
+      <rect x="78" y="362" width="30" height="24" rx="6"/>
+      <rect x="116" y="362" width="30" height="24" rx="6"/>
+      <rect x="154" y="362" width="30" height="24" rx="6"/>
+      <rect x="192" y="362" width="22" height="24" rx="6"/>
+      <rect x="78" y="396" width="30" height="24" rx="6"/>
+      <rect x="116" y="396" width="30" height="24" rx="6" fill="url(#navy)"/>
+      <rect x="154" y="396" width="30" height="24" rx="6"/>
+      <rect x="192" y="396" width="22" height="24" rx="6"/>
+      <rect x="78" y="430" width="30" height="20" rx="6"/>
+      <rect x="116" y="430" width="30" height="20" rx="6"/>
+      <rect x="154" y="430" width="30" height="20" rx="6"/>
+    </g>
   </g>
 
   <!-- top glare -->
-  <path d="M20 122a102 102 0 0 1 102-102h268a102 102 0 0 1 102 102v40C380 120 140 120 20 200z" fill="url(#shine)"/>
+  <path d="M20 122a102 102 0 0 1 102-102h268a102 102 0 0 1 102 102v30C380 110 140 110 20 190z" fill="url(#shine)"/>
 </svg>
