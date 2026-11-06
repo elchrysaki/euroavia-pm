@@ -18,6 +18,38 @@ A no-login group planner for phone, tablet and desktop. It works like When2meet 
 
 People can edit their own response later from the same device. The device keeps a private token for this. There are no accounts.
 
+## Performance: full effects and smooth mode
+
+The site picks one of two visual modes **before the first paint** (a small inline script in `index.html`):
+
+- **Full effects:** frosted glass on the bars and sheets, animated background, word-by-word headings, shimmer and glint.
+- **Smooth mode:** same layout and colours, with no backdrop blur, no infinite or filter-based animations, and shorter transitions.
+
+Smooth mode is used when any of these are true (first match wins):
+
+1. `?perf=lite` / `?perf=full` in the URL, or the person tapped the footer toggle. This choice is remembered (`?perf=auto` clears it).
+2. A frame-rate check in the last 7 days found this device dropping frames. The check samples ~1s of frames at startup and when the guided flow first opens.
+3. Reduce Motion or Reduce Transparency is on, Data Saver is on, or the connection is 2G/3G. The mode also switches mid-visit if the connection drops.
+4. The device is low-end (≤ 2 GB RAM, ≤ 2 cores, or < 4 GB with ≤ 4 cores), or the browser has no `backdrop-filter`.
+
+Some optimisations apply in both modes:
+
+- Cards are solid surfaces instead of blurred glass. Blur over the plain gradient was invisible, and every blurred layer is re-drawn on scroll.
+- Off-screen months skip rendering (`content-visibility`).
+- The pulse animation uses `opacity` instead of `filter`.
+- Event pages show the last saved copy instantly, then refresh. This also works offline.
+- Static files are cached by the browser (`public/_headers`).
+
+**Bump `?v=N` on `/app.js` and `/styles.css` in `index.html` with every release** so visitors get the new files immediately.
+
+Measured on an emulated Pixel 7 in Chrome with the CPU slowed 4× (median frame time / share of frames over 50 ms):
+
+| | Before | Full effects | Smooth mode |
+|---|---|---|---|
+| Scroll a 13-month calendar | 50 ms / 27% | 33 ms / 2% | 16.7 ms / 0% |
+| Guided-flow step change | 67 ms / 65–94% | 33 ms / 8% | 16.7 ms / 1% |
+| Backdrop-blur layers on screen | 37 | 4 | 0 |
+
 ## Stack
 
 - **Cloudflare Worker** (`src/worker.js`): a small JSON API under `/api/*`

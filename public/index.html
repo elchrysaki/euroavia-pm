@@ -13,14 +13,43 @@
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="stylesheet" href="/styles.css" />
+  <script>
+    /* Pick the visual mode before first paint: "full" (glass, long animations) or "lite" (smooth mode).
+       Order: ?perf= URL override > saved user choice > recent automatic downgrade > device/network signals. */
+    (function () {
+      var d = document.documentElement, mode = null, why = "default";
+      function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+      function mq(q) { return window.matchMedia && matchMedia(q).matches; }
+      var q = /[?&]perf=(lite|full|auto)\b/.exec(location.search);
+      if (q) { try { q[1] === "auto" ? localStorage.removeItem("convene:perf") : localStorage.setItem("convene:perf", q[1]); } catch (e) {} }
+      var saved = get("convene:perf");
+      if (saved === "lite" || saved === "full") { mode = saved; why = "user"; }
+      if (!mode) {
+        var auto = Number(get("convene:perf-auto")) || 0;
+        var c = navigator.connection || {}, mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency;
+        var css = window.CSS && CSS.supports;
+        if (auto && Date.now() - auto < 7 * 864e5) why = "slow-frames";
+        else if (mq("(prefers-reduced-motion: reduce)")) why = "reduced-motion";
+        else if (mq("(prefers-reduced-transparency: reduce)")) why = "reduced-transparency";
+        else if (c.saveData) why = "data-saver";
+        else if (/(^|-)2g|3g/.test(c.effectiveType || "")) why = "slow-network";
+        else if (mem && mem <= 2) why = "low-memory";
+        else if (cores && cores <= 2) why = "few-cores";
+        else if (mem && mem < 4 && cores && cores <= 4) why = "low-end";
+        else if (!css || !(CSS.supports("backdrop-filter", "blur(1px)") || CSS.supports("-webkit-backdrop-filter", "blur(1px)"))) why = "old-browser";
+        mode = why === "default" ? "full" : "lite";
+      }
+      d.setAttribute("data-perf", mode);
+      d.setAttribute("data-perf-reason", why);
+    })();
+  </script>
+  <link rel="stylesheet" href="/styles.css?v=6" />
 </head>
 <body>
   <div class="backdrop" aria-hidden="true">
     <div class="orb orb-a"></div>
     <div class="orb orb-b"></div>
     <div class="orb orb-c"></div>
-    <div class="grain"></div>
   </div>
 
   <header class="navbar" id="navbar">
@@ -32,9 +61,10 @@
   </header>
 
   <main id="app" class="app" aria-live="polite"></main>
+  <footer class="perf-footer"><button type="button" class="perf-toggle" id="perfToggle" hidden></button></footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/app.js" type="module"></script>
+  <script src="/app.js?v=6" type="module"></script>
 </body>
 </html>

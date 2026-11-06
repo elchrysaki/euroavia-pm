@@ -1,0 +1,18 @@
+# Static assets: reuse from the browser cache for an hour, then refresh in the background.
+# index.html references them with ?v=N — bump N on every release so new code is picked up at once.
+/app.js
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+/styles.css
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+/icon.svg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
+
+# Pages (the SPA shell) always revalidate so a deploy shows up immediately.
+/
+  Cache-Control: no-cache
+/e/*
+  Cache-Control: no-cache
+/created/*
+  Cache-Control: no-cache

@@ -25,10 +25,100 @@ const store = {
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      /* private mode etc. — non-essential */
+      /* private mode, quota etc. — non-essential */
+    }
+  },
+  setRaw(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* non-essential */
     }
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* Performance mode                                                    */
+/* "full" = glass + long animations, "lite" = smooth mode. The initial  */
+/* choice is made in index.html before first paint; here we can only   */
+/* downgrade (frame probe, connection change) or apply a user choice.  */
+/* ------------------------------------------------------------------ */
+
+const root = document.documentElement;
+const perf = {
+  get mode() {
+    return root.dataset.perf === "lite" ? "lite" : "full";
+  },
+  get reason() {
+    return root.dataset.perfReason || "default";
+  },
+  get lite() {
+    return this.mode === "lite";
+  },
+  set(mode, reason) {
+    root.dataset.perf = mode;
+    root.dataset.perfReason = reason;
+    renderPerfToggle();
+  },
+};
+
+const PERF_REASONS = {
+  "slow-frames": "to keep scrolling smooth",
+  "reduced-motion": "because Reduce Motion is on",
+  "reduced-transparency": "because Reduce Transparency is on",
+  "data-saver": "because Data Saver is on",
+  "slow-network": "on this slow connection",
+  "low-memory": "on this device",
+  "few-cores": "on this device",
+  "low-end": "on this device",
+  "old-browser": "in this browser",
+};
+
+function renderPerfToggle() {
+  const btn = document.getElementById("perfToggle");
+  if (!btn) return;
+  btn.hidden = false;
+  btn.innerHTML = perf.lite
+    ? `${icon("bolt")}<span>Smooth mode ${PERF_REASONS[perf.reason] || ""} · <b>Turn on full effects</b></span>`
+    : `${icon("sparkles")}<span>Full effects · <b>Switch to smooth mode</b></span>`;
+}
+
+function setPerfByUser(mode) {
+  store.setRaw("convene:perf", mode);
+  perf.set(mode, "user");
+}
+
+/** Watches ~1s of frames; if the device drops many, switch to smooth mode (and remember for 7 days). */
+let probing = false;
+function probeFrames(frames = 48) {
+  if (probing || perf.lite || perf.reason === "user" || document.visibilityState !== "visible") return;
+  probing = true;
+  const deltas = [];
+  let last = 0;
+  const step = (t) => {
+    if (document.visibilityState !== "visible") return void (probing = false); // rAF is throttled in background tabs
+    if (last) deltas.push(t - last);
+    last = t;
+    if (deltas.length < frames) return void requestAnimationFrame(step);
+    probing = false;
+    const sorted = [...deltas].sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    const janky = deltas.filter((d) => d > 50).length / deltas.length;
+    if (median > 28 || janky > 0.2) {
+      store.setRaw("convene:perf-auto", String(Date.now()));
+      perf.set("lite", "slow-frames");
+      toast("Switched to smooth mode for this device");
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+const conn = navigator.connection;
+conn?.addEventListener?.("change", () => {
+  if (perf.lite || perf.reason === "user") return;
+  if (conn.saveData) perf.set("lite", "data-saver");
+  else if (/(^|-)2g|3g/.test(conn.effectiveType || "")) perf.set("lite", "slow-network");
+});
 
 const icon = (name) => {
   const paths = {
@@ -46,6 +136,7 @@ const icon = (name) => {
     thumb: '<path d="M7 11v9H4.5A1.5 1.5 0 0 1 3 18.5v-6A1.5 1.5 0 0 1 4.5 11z"/><path d="M7 11l4-7.5a2 2 0 0 1 2.9 2.1L13 10h5.6a2 2 0 0 1 2 2.4l-1.4 6.5A2 2 0 0 1 17.2 20H7"/>',
     pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4.5a3 3 0 0 0 3.5 4M16 6h3.5a3 3 0 0 1-3.5 4M12 13v4M8.5 20.5h7M9.5 17h5v3.5h-5z"/>',
+    bolt: '<path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/>',
     grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
   };
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ""}</svg>`;
@@ -475,18 +566,53 @@ function renderCreated(id) {
 
 let current = null; // { event, responses, agg, tab, selectMode, selected:Set }
 
+const CACHE_LIMIT = 6;
+function cacheEvent(id, data) {
+  const keys = store.get("convene:cache-keys", []).filter((k) => k !== id);
+  keys.unshift(id);
+  for (const old of keys.splice(CACHE_LIMIT)) {
+    try {
+      localStorage.removeItem(`convene:cache:${old}`);
+    } catch {
+      /* ignore */
+    }
+  }
+  store.set("convene:cache-keys", keys);
+  store.set(`convene:cache:${id}`, data);
+}
+
+/**
+ * Shows the last saved copy of an event immediately (if any), then refreshes from the network and
+ * repaints only when something changed. On a slow connection the page is usable at once.
+ */
 async function renderEvent(id, { keepTab = false } = {}) {
   const prevTab = keepTab && current ? current.tab : "calendar";
-  if (!keepTab) app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const cached = keepTab ? null : store.get(`convene:cache:${id}`);
+  if (cached) paintEvent(cached, prevTab);
+  else if (!keepTab) app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
   let data;
   try {
     data = await api(`/events/${id}`);
   } catch (err) {
+    if (cached) return toast("Can't reach the server — showing your saved copy", { error: true });
     app.innerHTML = `<div class="empty card" style="margin-top:40px"><div class="glyph">${icon("calendar")}</div><h3>Event not found</h3><p>${esc(
       err.message,
     )}</p><a class="btn btn-primary" href="/" data-link style="margin-top:12px">Create a new event</a></div>`;
     return;
   }
+  cacheEvent(id, data);
+  if (location.pathname.replace(/\/$/, "") !== `/e/${id}`) return; // user navigated away meanwhile
+  if (cached && JSON.stringify(cached) === JSON.stringify(data)) return;
+  if (cached && ($(".flow") || $(".sheet-wrap"))) {
+    // don't yank the page from under an open sheet/flow; keep the fresh data for the next paint
+    Object.assign(current, data, { agg: aggregate(data.responses) });
+    return;
+  }
+  paintEvent(data, current && cached ? current.tab : prevTab);
+}
+
+function paintEvent(data, prevTab) {
   current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set() };
   const { event, responses } = data;
   document.title = `${event.title} — Convene`;
@@ -829,7 +955,12 @@ document.addEventListener("keydown", (e) => {
 
 const STEPS = ["name", "dates", "destinations", "activities", "review"];
 
+let flowProbed = false;
 function openFlow({ edit = null } = {}) {
+  if (!flowProbed) {
+    flowProbed = true;
+    setTimeout(() => probeFrames(40), 120); // the flow is the most animated screen
+  }
   const { event, responses } = current;
   const others = aggregate(responses, { excludeId: edit?.id });
   const r = edit?.response;
@@ -870,7 +1001,7 @@ function openFlow({ edit = null } = {}) {
     setTimeout(() => {
       flow.remove();
       document.body.style.overflow = "";
-    }, 330);
+    }, perf.lite ? 180 : 330);
   };
 
   const allDestNames = () => {
@@ -921,7 +1052,7 @@ function openFlow({ edit = null } = {}) {
     if (old && old.innerHTML) {
       old.classList.remove("enter");
       old.classList.add("leave");
-      setTimeout(render, 240);
+      setTimeout(render, perf.lite ? 110 : 240);
     } else render();
   }
 
@@ -1302,6 +1433,7 @@ function openFlow({ edit = null } = {}) {
 }
 
 function burst() {
+  if (perf.lite) return;
   const wrap = document.createElement("div");
   wrap.className = "burst";
   const colors = ["#0a4fd8", "#1d9bff", "#8fcbff", "#00d2ff", "#ffffff", "#c9dcf0"];
@@ -1314,4 +1446,7 @@ function burst() {
   setTimeout(() => wrap.remove(), 1600);
 }
 
+$("#perfToggle").addEventListener("click", () => setPerfByUser(perf.lite ? "full" : "lite"));
+renderPerfToggle();
 route();
+requestAnimationFrame(() => probeFrames());
