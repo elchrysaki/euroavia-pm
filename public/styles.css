@@ -578,3 +578,15 @@ select.field { -webkit-appearance: none; appearance: none; background-image: lin
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .flow-title .w { opacity: 1; transform: none; filter: none; }
 }
+
+/* ---------- Date range ---------- */
+.day.out { background: transparent; color: var(--label-3); opacity: .35; pointer-events: none; font-weight: 400; }
+.month-year { color: var(--label-3); font-weight: 600; }
+.range-summary { display: flex; align-items: center; gap: 8px; margin: 12px 4px 0; font-size: 15px; color: var(--label-2); min-height: 22px; }
+.range-summary svg { width: 18px; height: 18px; flex: none; color: var(--accent); }
+.range-summary b { color: var(--label); font-weight: 600; }
+.range-summary.error, .range-summary.error svg { color: var(--danger); }
+.row input[type="date"] { -webkit-appearance: none; appearance: none; text-align: right; color: var(--accent); font-weight: 500; min-height: 28px; }
+.row input[type="date"]::-webkit-date-and-time-value { text-align: right; }
+.segmented button { white-space: nowrap; }
+@media (max-width: 380px) { .year-pick button { font-size: 13px; padding: 0 4px; } }

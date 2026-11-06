@@ -2,10 +2,10 @@
 
 A no-login group planner for phone, tablet and desktop. It works like When2meet or Lettucemeet, and adds destination voting and activity ideas.
 
-1. **Create an event.** Give it a name, optional notes and a calendar year. You get a personal link to share. An event can't be edited or deleted once it's created.
+1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
 2. **Share the link.** Each person goes through a short animated flow:
    - enters their name
-   - marks days on the year calendar: **dark blue** for *definitely*, **light blue** for *maybe* (tap a day, or press and hold then drag to mark many days)
+   - marks days on the event's calendar: **dark blue** for *definitely*, **light blue** for *maybe* (tap a day, or press and hold then drag to mark many days)
    - picks or suggests **destinations** (they see what others suggested)
    - adds **activities** with pasted links, for a destination or in general, and can like other people's ideas
    - submits
@@ -50,9 +50,9 @@ You can also connect the GitHub repo in **Cloudflare dashboard → Workers & Pag
 
 | Method | Path | Body |
 | --- | --- | --- |
-| `POST` | `/api/events` | `{ title, description?, year }` → `{ id }` |
+| `POST` | `/api/events` | `{ title, description?, start_date, end_date }` → `{ id }` |
 | `GET` | `/api/events/:id` | → `{ event, responses[] }` |
 | `POST` | `/api/events/:id/responses` | `{ name, yes[], maybe[], destinations[], activities[], likes[] }` → `{ id, token }` |
 | `PUT` | `/api/events/:id/responses/:rid` | same as above + `token` |
 
-Dates are `YYYY-MM-DD` strings. All input is sanitised on the server: lengths are capped, dates are checked against the event year, and links must be http(s).
+Dates are `YYYY-MM-DD` strings. All input is sanitised on the server: lengths are capped, dates must fall inside the event's range, and links must be http(s). The worker creates and upgrades its own tables on first use, so a new D1 database needs no setup.

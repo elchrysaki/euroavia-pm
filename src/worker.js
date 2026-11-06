@@ -52,27 +52,44 @@ function cleanLink(value) {
   }
 }
 
-function validDatesForYear(list, year) {
+const MAX_RANGE_DAYS = 731; // up to two years
+
+function isValidDate(d) {
+  if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  const date = new Date(`${d}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === d;
+}
+
+const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+/** Older events only stored a year; treat those as the whole calendar year. */
+function withRange(event) {
+  if (!event) return event;
+  return {
+    ...event,
+    start_date: event.start_date || `${event.year}-01-01`,
+    end_date: event.end_date || `${event.year}-12-31`,
+  };
+}
+
+function validDatesInRange(list, event) {
   if (!Array.isArray(list)) return [];
   const out = new Set();
   for (const d of list) {
-    if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-    if (Number(d.slice(0, 4)) !== year) continue;
-    const date = new Date(`${d}T00:00:00Z`);
-    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== d) continue;
+    if (!isValidDate(d) || d < event.start_date || d > event.end_date) continue;
     out.add(d);
-    if (out.size >= 366) break;
+    if (out.size >= MAX_RANGE_DAYS) break;
   }
   return [...out].sort();
 }
 
-function sanitizeResponse(body, year) {
+function sanitizeResponse(body, event) {
   const name = cleanText(body.name, LIMITS.name);
   if (!name) return { error: "Please enter your name." };
 
-  const yes = validDatesForYear(body.yes, year);
+  const yes = validDatesInRange(body.yes, event);
   const yesSet = new Set(yes);
-  const maybe = validDatesForYear(body.maybe, year).filter((d) => !yesSet.has(d));
+  const maybe = validDatesInRange(body.maybe, event).filter((d) => !yesSet.has(d));
 
   const destSeen = new Set();
   const destinations = [];
@@ -121,9 +138,12 @@ async function readBody(request) {
 }
 
 async function getEvent(env, id) {
-  return env.DB.prepare("SELECT id, title, description, year, created_at FROM events WHERE id = ?")
+  const row = await env.DB.prepare(
+    "SELECT id, title, description, year, start_date, end_date, created_at FROM events WHERE id = ?",
+  )
     .bind(id)
     .first();
+  return withRange(row);
 }
 
 async function handleApi(request, env, url) {
@@ -136,14 +156,21 @@ async function handleApi(request, env, url) {
     if (!body) return fail("Invalid request.");
     const title = cleanText(body.title, LIMITS.title);
     const description = cleanText(body.description, LIMITS.description);
-    const year = Number(body.year);
-    const thisYear = new Date().getUTCFullYear();
     if (!title) return fail("Please give your event a name.");
-    if (!Number.isInteger(year) || year < thisYear || year > thisYear + 3) return fail("Pick a valid year.");
+    const start = body.start_date;
+    const end = body.end_date;
+    if (!isValidDate(start) || !isValidDate(end)) return fail("Pick a start and an end date.");
+    if (end < start) return fail("The end date must be after the start date.");
+    // allow one day of slack for time zones ahead of UTC
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    if (end < yesterday) return fail("Pick dates in the future.");
+    if (daysBetween(start, end) + 1 > MAX_RANGE_DAYS) return fail("Pick a range of up to two years.");
 
     const id = randomId(10);
-    await env.DB.prepare("INSERT INTO events (id, title, description, year, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(id, title, description, year, Date.now())
+    await env.DB.prepare(
+      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now())
       .run();
     return json({ id }, 201);
   }
@@ -181,7 +208,7 @@ async function handleApi(request, env, url) {
 
     const body = await readBody(request);
     if (!body) return fail("Invalid request.");
-    const clean = sanitizeResponse(body, event.year);
+    const clean = sanitizeResponse(body, event);
     if (clean.error) return fail(clean.error);
 
     const id = randomId(10);
@@ -206,7 +233,7 @@ async function handleApi(request, env, url) {
       .first();
     if (!existing || existing.token !== body.token) return fail("You can only edit your own response.", 403);
 
-    const clean = sanitizeResponse(body, event.year);
+    const clean = sanitizeResponse(body, event);
     if (clean.error) return fail(clean.error);
     await env.DB.prepare("UPDATE responses SET name = ?, data = ?, updated_at = ? WHERE id = ?")
       .bind(clean.name, JSON.stringify(clean.data), Date.now(), parts[3])
@@ -223,13 +250,20 @@ let schemaReady = null;
 function ensureSchema(env) {
   schemaReady ??= env.DB.batch([
     env.DB.prepare(
-      "CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', year INTEGER NOT NULL, created_at INTEGER NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', year INTEGER NOT NULL, start_date TEXT, end_date TEXT, created_at INTEGER NOT NULL)",
     ),
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS responses (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id), name TEXT NOT NULL, token TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     ),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_responses_event ON responses(event_id, created_at)"),
-  ]).catch((err) => {
+  ])
+    .then(async () => {
+      // databases created before date ranges existed: add the columns (fails harmlessly if present)
+      for (const col of ["start_date", "end_date"]) {
+        await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} TEXT`).run().catch(() => {});
+      }
+    })
+    .catch((err) => {
     schemaReady = null; // retry on the next request
     throw err;
   });

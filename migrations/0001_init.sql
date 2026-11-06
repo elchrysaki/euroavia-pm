@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS events (
   title       TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   year        INTEGER NOT NULL,
+  start_date  TEXT,
+  end_date    TEXT,
   created_at  INTEGER NOT NULL
 );
 

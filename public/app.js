@@ -147,29 +147,55 @@ const parseDate = (s) => {
 const fmtDate = (s, opts = { weekday: "short", month: "short", day: "numeric" }) => parseDate(s).toLocaleDateString(undefined, opts);
 const fmtLong = (s) => fmtDate(s, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-/** Builds a year of month cards. cell(date, isPast, isToday) -> { cls, style, inner, attrs } */
-function monthsHtml(year, cell, { quick = false } = {}) {
+const toStr = (dt) => ymd(dt.getFullYear(), dt.getMonth(), dt.getDate());
+/** Same day n months later, minus one day (e.g. 6 Nov + 3 months -> 5 Feb), clamped to month length. */
+function addMonths(dateStr, n) {
+  const d = parseDate(dateStr);
+  const target = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d.getDate(), last));
+  target.setDate(target.getDate() - 1);
+  return toStr(target);
+}
+const daysInRange = (a, b) => Math.round((parseDate(b) - parseDate(a)) / 86_400_000) + 1;
+function fmtRange(a, b) {
+  const sameYear = a.slice(0, 4) === b.slice(0, 4);
+  const left = fmtDate(a, sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  return `${left} – ${fmtDate(b, { month: "short", day: "numeric", year: "numeric" })}`;
+}
+/** Event date window; events from before ranges existed cover their calendar year. */
+const eventRange = (e) => ({ start: e.start_date || `${e.year}-01-01`, end: e.end_date || `${e.year}-12-31` });
+
+/**
+ * Builds month cards covering range.start..range.end. Days outside the range are shown faded and inert.
+ * cell(date, isPast, isToday) -> { cls, style, inner, attrs, label }
+ */
+function monthsHtml(range, cell, { quick = false } = {}) {
   const today = todayStr();
+  const first = parseDate(range.start);
+  const last = parseDate(range.end);
+  const multiYear = range.start.slice(0, 4) !== range.end.slice(0, 4);
   let out = '<div class="months">';
-  for (let m = 0; m < 12; m++) {
-    const first = new Date(year, m, 1);
-    const days = new Date(year, m + 1, 0).getDate();
-    const offset = (first.getDay() + 6) % 7; // Monday first
-    const lastDate = ymd(year, m, days);
-    if (lastDate < today && !quick) {
-      // keep past months visible but compact by still rendering them
-    }
-    out += `<section class="card month" data-month="${m}">
-      <h3><span>${MONTHS[m]}</span>${
+  for (let y = first.getFullYear(), m = first.getMonth(); y < last.getFullYear() || (y === last.getFullYear() && m <= last.getMonth()); m === 11 ? (y++, (m = 0)) : m++) {
+    const days = new Date(y, m + 1, 0).getDate();
+    const offset = (new Date(y, m, 1).getDay() + 6) % 7; // Monday first
+    const key = `${y}-${pad(m + 1)}`;
+    const title = multiYear && !quick ? MONTHS[m] : `${MONTHS[m]}${multiYear ? ` <span class="month-year">${y}</span>` : ""}`;
+    out += `<section class="card month" data-month="${key}">
+      <h3><span>${title}</span>${
         quick
-          ? `<span class="month-quick"><button type="button" data-fill="${m}">Fill</button><button type="button" data-clear="${m}">Clear</button></span>`
-          : `<small>${year}</small>`
+          ? `<span class="month-quick"><button type="button" data-fill="${key}">Fill</button><button type="button" data-clear="${key}">Clear</button></span>`
+          : `<small>${y}</small>`
       }</h3>
       <div class="weekdays">${WEEKDAYS.map((d) => `<span>${d}</span>`).join("")}</div>
       <div class="days">`;
     for (let i = 0; i < offset; i++) out += '<span class="day blank"></span>';
     for (let d = 1; d <= days; d++) {
-      const date = ymd(year, m, d);
+      const date = ymd(y, m, d);
+      if (date < range.start || date > range.end) {
+        out += `<span class="day out" aria-hidden="true">${d}</span>`;
+        continue;
+      }
       const past = date < today;
       const c = cell(date, past, date === today) || {};
       out += `<button type="button" class="day${past ? " past" : ""}${date === today ? " today" : ""} ${c.cls || ""}" data-date="${date}" ${
@@ -259,7 +285,8 @@ function route() {
 
 function renderHome() {
   document.title = "Convene — find the days that work";
-  const year = new Date().getFullYear();
+  const today = todayStr();
+  const nextYear = new Date().getFullYear() + 1;
   const recent = store.get("convene:events", []);
   const heat = Array.from({ length: 42 }, (_, i) => {
     const a = [0.08, 0.15, 0.3, 0.55, 0.85, 1][Math.floor(Math.abs(Math.sin(i * 1.7 + 0.4)) * 6)];
@@ -272,7 +299,7 @@ function renderHome() {
         <h1 class="large-title fade-in">Find the days<br/>that <span class="shine">work for everyone.</span></h1>
         <p class="subtitle fade-in d1">Create an event, share one link, and watch the calendar light up as people mark when they're free. Then vote on where to go and what to do.</p>
         <ul class="feature-list fade-in d2">
-          <li><span class="feature-icon">${icon("calendar")}</span><div><b>The whole year at a glance</b>Darker days mean more people can make it.</div></li>
+          <li><span class="feature-icon">${icon("calendar")}</span><div><b>Any window you like</b>The next few months, a whole year, or exact dates. Darker days mean more people can make it.</div></li>
           <li><span class="feature-icon">${icon("pin")}</span><div><b>Destination leaderboard</b>Everyone suggests places; the favourites rise to the top.</div></li>
           <li><span class="feature-icon">${icon("lock")}</span><div><b>No accounts, no logins</b>Just a name and a few taps.</div></li>
         </ul>
@@ -286,11 +313,25 @@ function renderHome() {
             <div class="row"><label for="title">Name</label><input id="title" name="title" maxlength="80" placeholder="Summer trip 2027" required /></div>
             <div class="row"><label for="desc">Notes</label><textarea id="desc" name="description" maxlength="400" placeholder="Optional — what's the plan?"></textarea></div>
           </div>
-          <div class="section-header">Calendar year</div>
-          <div class="segmented year-pick" role="group" aria-label="Calendar year" data-seg="year">
+          <div class="section-header">Dates to choose from</div>
+          <div class="segmented year-pick" role="group" aria-label="Date range" data-seg="range">
             <span class="thumb"></span>
-            ${[year, year + 1, year + 2].map((y, i) => `<button type="button" data-value="${y}" aria-pressed="${i === 0}">${y}</button>`).join("")}
+            <button type="button" data-value="3" aria-pressed="false">3 months</button>
+            <button type="button" data-value="6" aria-pressed="true">6 months</button>
+            <button type="button" data-value="12" aria-pressed="false">1 year</button>
+            <button type="button" data-value="custom" aria-pressed="false">Custom</button>
           </div>
+          <div class="range-custom" id="rangeCustom" hidden>
+            <div class="card group" style="box-shadow:none;background:var(--glass-strong);margin-top:10px">
+              <div class="row"><label for="startDate">Starts</label><input type="date" id="startDate" min="${today}" value="${today}" /></div>
+              <div class="row"><label for="endDate">Ends</label><input type="date" id="endDate" min="${today}" value="${addMonths(today, 6)}" /></div>
+            </div>
+            <div class="chips" style="margin-top:10px">
+              <button type="button" class="btn btn-tinted" data-whole="${nextYear - 1}">Rest of ${nextYear - 1}</button>
+              <button type="button" class="btn btn-tinted" data-whole="${nextYear}">All of ${nextYear}</button>
+            </div>
+          </div>
+          <p class="range-summary" id="rangeSummary"></p>
           <div style="margin-top:22px"><button class="btn btn-primary btn-block" type="submit" id="createBtn">${icon("sparkles")} Create event</button></div>
           <p class="fineprint">${icon("lock")}<span>Once created, an event can't be edited or deleted — so everyone can trust the link they were sent.</span></p>
         </div>
@@ -306,15 +347,50 @@ function renderHome() {
                (e) =>
                  `<a class="row" href="/e/${esc(e.id)}" data-link style="text-decoration:none;color:inherit"><span class="feature-icon" style="width:30px;height:30px">${icon(
                    "calendar",
-                 )}</span><span style="flex:1;font-weight:600">${esc(e.title)}</span><span style="color:var(--label-3)">${esc(e.year || "")}</span></a>`,
+                 )}</span><span style="flex:1;font-weight:600">${esc(e.title)}</span><span style="color:var(--label-3);font-size:14px">${esc(e.start ? fmtRange(e.start, e.end) : e.year || "")}</span></a>`,
              )
              .join("")}</div>`
         : ""
     }
   `;
 
-  const seg = setupSegmented($('[data-seg="year"]'));
   const form = $("#createForm");
+  const startIn = $("#startDate");
+  const endIn = $("#endDate");
+  const custom = $("#rangeCustom");
+  const summary = $("#rangeSummary");
+  let preset = "6";
+  const currentRange = () =>
+    preset === "custom" ? { start: startIn.value, end: endIn.value } : { start: today, end: addMonths(today, Number(preset)) };
+  const updateSummary = () => {
+    const r = currentRange();
+    const ok = r.start && r.end && r.end >= r.start;
+    summary.classList.toggle("error", !ok);
+    summary.innerHTML = ok
+      ? `${icon("calendar")}<span><b>${esc(fmtRange(r.start, r.end))}</b> · ${daysInRange(r.start, r.end)} days</span>`
+      : `${icon("calendar")}<span>The end date must be after the start date.</span>`;
+  };
+  setupSegmented($('[data-seg="range"]'), (v) => {
+    preset = v;
+    custom.hidden = v !== "custom";
+    updateSummary();
+  });
+  startIn.addEventListener("input", () => {
+    endIn.min = startIn.value || today;
+    if (endIn.value && endIn.value < startIn.value) endIn.value = addMonths(startIn.value, 1);
+    updateSummary();
+  });
+  endIn.addEventListener("input", updateSummary);
+  custom.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-whole]");
+    if (!b) return;
+    const y = b.dataset.whole;
+    startIn.value = `${y}-01-01` < today ? today : `${y}-01-01`;
+    endIn.value = `${y}-12-31`;
+    endIn.min = startIn.value;
+    updateSummary();
+  });
+  updateSummary();
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("#createBtn");
@@ -323,14 +399,17 @@ function renderHome() {
       form.title.focus();
       return toast("Give your event a name", { error: true });
     }
+    const range = currentRange();
+    if (!range.start || !range.end || range.end < range.start) return toast("Check the dates", { error: true });
+    if (daysInRange(range.start, range.end) > 731) return toast("Pick a range of up to two years", { error: true });
     btn.disabled = true;
     try {
       const { id } = await api("/events", {
         method: "POST",
-        body: { title, description: form.description.value.trim(), year: Number(seg.value()) },
+        body: { title, description: form.description.value.trim(), start_date: range.start, end_date: range.end },
       });
       const list = store.get("convene:events", []).filter((x) => x.id !== id);
-      list.unshift({ id, title, year: Number(seg.value()) });
+      list.unshift({ id, title, start: range.start, end: range.end });
       store.set("convene:events", list.slice(0, 20));
       navigate(`/created/${id}`);
     } catch (err) {
@@ -414,7 +493,7 @@ async function renderEvent(id, { keepTab = false } = {}) {
 
   const recent = store.get("convene:events", []);
   if (!recent.some((e) => e.id === event.id)) {
-    recent.unshift({ id: event.id, title: event.title, year: event.year });
+    recent.unshift({ id: event.id, title: event.title, start: event.start_date, end: event.end_date });
     store.set("convene:events", recent.slice(0, 20));
   }
 
@@ -428,7 +507,7 @@ async function renderEvent(id, { keepTab = false } = {}) {
   app.innerHTML = `
     <div class="event-head">
       <div class="fade-in">
-        <div class="eyebrow">${icon("calendar").replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${event.year}</div>
+        <div class="eyebrow">${icon("calendar").replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</div>
         <h1 class="large-title">${esc(event.title)}</h1>
         ${event.description ? `<p class="subtitle" style="margin:8px 0 0">${esc(event.description)}</p>` : ""}
         <div class="event-meta">
@@ -499,8 +578,8 @@ function calendarHtml() {
 
   if (!n) {
     return `<div class="card empty"><div class="glyph">${icon("calendar")}</div><h3>No one has responded yet</h3><p>Be the first — add your availability, then share the link with the group.</p></div>
-      <div class="section-title">${event.year}</div>
-      ${monthsHtml(event.year, () => ({}))}`;
+      <div class="section-title">${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</div>
+      ${monthsHtml(eventRange(event), () => ({}))}`;
   }
 
   return `
@@ -518,7 +597,7 @@ function calendarHtml() {
       <div class="legend"><span>Fewer</span><span class="legend-scale">${legend}</span><span>More people</span></div>
       <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} Select dates</button>
     </div>
-    ${monthsHtml(event.year, (date) => {
+    ${monthsHtml(eventRange(event), (date) => {
       const s = days.get(date);
       if (!s) return {};
       const score = scoreOf(s, n);
@@ -596,7 +675,7 @@ function openDaySheet(dates) {
       : `${dates.length} days selected`;
   const sub =
     dates.length === 1
-      ? String(current.event.year)
+      ? dates[0].slice(0, 4)
       : `${fmtDate(dates[0], { month: "short", day: "numeric" })} – ${fmtDate(dates[dates.length - 1], { month: "short", day: "numeric" })} · counts people free on all of them`;
 
   const section = (label, names, sw) =>
@@ -868,7 +947,7 @@ function openFlow({ edit = null } = {}) {
           </div>
         </div>
         <div class="picker" id="picker">${monthsHtml(
-          event.year,
+          eventRange(event),
           (date, past) => {
             if (past) return { attrs: "disabled" };
             if (st.yes.has(date)) return { cls: "yes" };
