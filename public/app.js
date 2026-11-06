@@ -339,6 +339,428 @@ function aggregate(responses, { excludeId = null } = {}) {
 const scoreOf = (stat, n) => (n ? (stat.yes.length + stat.maybe.length * 0.5) / n : 0);
 
 /* ------------------------------------------------------------------ */
+/* Motion: springs (apple-design §4–6)                                 */
+/* response = how fast it gets there (s), damping 1 = no overshoot.    */
+/* Always starts from the current value and carries velocity, so any  */
+/* animation can be grabbed and redirected mid-flight.                 */
+/* ------------------------------------------------------------------ */
+
+function spring({ from, to, velocity = 0, damping = 1, response = 0.35, epsilon = 0.5, onUpdate, onDone }) {
+  const k = (2 * Math.PI / response) ** 2;
+  const c = (4 * Math.PI * damping) / response;
+  let x = from;
+  let v = velocity;
+  let last = 0;
+  let raf = 0;
+  const step = (t) => {
+    const dt = last ? Math.min(0.032, (t - last) / 1000) : 1 / 60;
+    last = t;
+    for (let i = 0; i < 4; i++) {
+      const h = dt / 4;
+      v += (-k * (x - to) - c * v) * h;
+      x += v * h;
+    }
+    if (Math.abs(v) < epsilon * 10 && Math.abs(x - to) < epsilon) {
+      onUpdate(to);
+      onDone?.();
+      return;
+    }
+    onUpdate(x);
+    raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+  return {
+    stop() {
+      cancelAnimationFrame(raf);
+    },
+    get value() {
+      return x;
+    },
+    get velocity() {
+      return v;
+    },
+  };
+}
+
+/** Apple's momentum projection: where a flick would come to rest. */
+const project = (velocity, rate = 0.998) => ((velocity / 1000) * rate) / (1 - rate);
+/** Progressive resistance past a boundary instead of a hard stop. */
+const rubberband = (over, dim, c = 0.55) => (over * dim * c) / (dim + c * Math.abs(over));
+const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/* ------------------------------------------------------------------ */
+/* Day painting: tap to toggle, press-and-hold then drag to paint.     */
+/* Feedback shows on pointer-down; a tap commits on release (§10).     */
+/* ------------------------------------------------------------------ */
+
+function attachPainter(root, st, onChange) {
+  let painting = false;
+  let action = null;
+  let timer = null;
+  let start = null;
+  let last = null;
+
+  const setCell = (cell) => {
+    const d = cell.dataset.date;
+    st.yes.delete(d);
+    st.maybe.delete(d);
+    cell.classList.remove("yes", "maybe");
+    if (action === "yes" || action === "maybe") {
+      st[action].add(d);
+      cell.classList.add(action);
+    }
+    onChange();
+  };
+  const begin = (cell) => {
+    const d = cell.dataset.date;
+    action = st.mode !== "erase" && st[st.mode].has(d) ? "erase" : st.mode; // tapping a marked day toggles it off
+    last = cell;
+    setCell(cell);
+  };
+  const cellAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    const c = el && el.closest(".day[data-date]");
+    return c && !c.disabled && root.contains(c) ? c : null;
+  };
+  const unpress = () => start?.cell.classList.remove("pressing");
+
+  root.addEventListener("contextmenu", (e) => e.preventDefault());
+  root.addEventListener("pointerdown", (e) => {
+    const cell = e.target.closest(".day[data-date]");
+    if (!cell || cell.disabled) return;
+    start = { x: e.clientX, y: e.clientY, cell };
+    cell.classList.add("pressing"); // instant response on touch-down
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      painting = true;
+      begin(cell);
+    } else {
+      timer = setTimeout(() => {
+        timer = null;
+        painting = true;
+        begin(cell);
+        navigator.vibrate?.(8);
+      }, 260);
+    }
+  });
+  root.addEventListener("pointermove", (e) => {
+    if (!start) return;
+    if (!painting) {
+      if (timer && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) {
+        clearTimeout(timer); // moved before the hold: it's a scroll
+        timer = null;
+        unpress();
+        start = null;
+      }
+      return;
+    }
+    const c = cellAt(e.clientX, e.clientY);
+    if (c && c !== last) {
+      last = c;
+      setCell(c);
+    }
+  });
+  const end = (e) => {
+    if (start && timer && e.type === "pointerup") begin(start.cell); // a quick tap commits on release
+    clearTimeout(timer);
+    timer = null;
+    unpress();
+    painting = false;
+    start = null;
+  };
+  root.addEventListener("pointerup", end);
+  root.addEventListener("pointercancel", (e) => {
+    if (!painting) end(e);
+  });
+  root.addEventListener("lostpointercapture", () => painting && end({ type: "cancel" }));
+  root.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!painting) return;
+      e.preventDefault(); // painting, not scrolling
+      const t = e.touches[0];
+      const c = t && cellAt(t.clientX, t.clientY);
+      if (c && c !== last) {
+        last = c;
+        setCell(c);
+      }
+    },
+    { passive: false },
+  );
+  root.addEventListener("touchend", () => {
+    if (painting) end({ type: "touchend" });
+  });
+  root.addEventListener("click", (e) => {
+    const fill = e.target.closest("[data-fill]");
+    const clear = e.target.closest("[data-clear]");
+    if (!fill && !clear) return;
+    const m = (fill || clear).closest("[data-month]");
+    action = clear || st.mode === "erase" ? "erase" : st.mode;
+    $$(".day[data-date]:not([disabled])", m).forEach(setCell);
+  });
+  root.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches(".day[data-date]")) {
+      e.preventDefault();
+      begin(e.target);
+    }
+  });
+  return { get painting() { return painting; } };
+}
+
+/** Groups consecutive days with the same state into runs, e.g. Nov 20–22. */
+function dayRuns(st) {
+  const all = [...st.yes].map((d) => [d, "yes"]).concat([...st.maybe].map((d) => [d, "maybe"]));
+  all.sort((a, b) => a[0].localeCompare(b[0]));
+  const runs = [];
+  for (const [d, kind] of all) {
+    const prev = runs[runs.length - 1];
+    if (prev && prev.kind === kind && daysInRange(prev.end, d) === 2) prev.end = d;
+    else runs.push({ start: d, end: d, kind });
+  }
+  return runs;
+}
+const fmtRun = (r) => {
+  const a = fmtDate(r.start, { month: "short", day: "numeric" });
+  if (r.start === r.end) return a;
+  const sameMonth = r.start.slice(0, 7) === r.end.slice(0, 7);
+  return `${a} – ${sameMonth ? Number(r.end.slice(8)) : fmtDate(r.end, { month: "short", day: "numeric" })}`;
+};
+
+/* ------------------------------------------------------------------ */
+/* Day picker sheet: one continuous, scrollable calendar.              */
+/* Phone/tablet: bottom sheet with 1:1 drag, momentum dismiss and      */
+/* rubber-banding. Desktop: dialog that grows from the button that     */
+/* opened it. Reduced motion: cross-fade.                              */
+/* ------------------------------------------------------------------ */
+
+function sheetMonthsHtml(range, st) {
+  const today = todayStr();
+  const first = parseDate(range.start);
+  const lastD = parseDate(range.end);
+  let out = "";
+  for (let y = first.getFullYear(), m = first.getMonth(); y < lastD.getFullYear() || (y === lastD.getFullYear() && m <= lastD.getMonth()); m === 11 ? (y++, (m = 0)) : m++) {
+    const days = new Date(y, m + 1, 0).getDate();
+    const offset = (new Date(y, m, 1).getDay() + 6) % 7;
+    const key = `${y}-${pad(m + 1)}`;
+    let cells = "";
+    for (let i = 0; i < offset; i++) cells += '<span class="day blank"></span>';
+    for (let d = 1; d <= days; d++) {
+      const date = ymd(y, m, d);
+      if (date < range.start || date > range.end) {
+        cells += `<span class="day out" aria-hidden="true">${d}</span>`;
+        continue;
+      }
+      const past = date < today;
+      const cls = st.yes.has(date) ? " yes" : st.maybe.has(date) ? " maybe" : "";
+      cells += `<button type="button" class="day${past ? " past" : ""}${date === today ? " today" : ""}${cls}" data-date="${date}" ${past ? "disabled" : ""} aria-label="${esc(fmtLong(date))}">${d}</button>`;
+    }
+    out += `<section class="dp-month" data-month="${key}">
+      <h3 class="dp-mtitle"><span>${MONTHS[m]} <em>${y}</em></span><span class="month-quick"><button type="button" data-fill="${key}">Fill</button><button type="button" data-clear="${key}">Clear</button></span></h3>
+      <div class="days">${cells}</div>
+    </section>`;
+  }
+  return out;
+}
+
+function openDayPicker({ range, st, origin, focusDate, onChange, onClose }) {
+  const isDialog = window.matchMedia("(min-width: 900px) and (pointer: fine)").matches;
+  const calm = reducedMotion();
+  const parent = $(".flow");
+  const prevFocus = document.activeElement;
+
+  const wrap = document.createElement("div");
+  wrap.className = `dp-wrap ${isDialog ? "is-dialog" : "is-sheet"}${calm ? " calm" : ""}`;
+  wrap.innerHTML = `
+    <div class="dp-scrim"></div>
+    <div class="dp" role="dialog" aria-modal="true" aria-labelledby="dpTitle">
+      <div class="dp-head">
+        <div class="grabber" aria-hidden="true"></div>
+        <div class="dp-titlebar">
+          <div><h2 id="dpTitle">Choose your days</h2><p class="dp-sub" id="dpSub"></p></div>
+          <button type="button" class="btn btn-primary dp-done">Done</button>
+        </div>
+        <div class="segmented" data-seg="dpmode" role="group" aria-label="Marking mode">
+          <span class="thumb"></span>
+          <button type="button" data-value="yes" aria-pressed="${st.mode === "yes"}"><span class="swatch yes"></span>Definitely</button>
+          <button type="button" data-value="maybe" aria-pressed="${st.mode === "maybe"}"><span class="swatch maybe"></span>Maybe</button>
+          <button type="button" data-value="erase" aria-pressed="${st.mode === "erase"}"><span class="swatch erase"></span>Erase</button>
+        </div>
+        <div class="dp-weekdays" aria-hidden="true">${WEEKDAYS.map((d) => `<span>${d}</span>`).join("")}</div>
+      </div>
+      <div class="dp-scroll picker" tabindex="-1">${sheetMonthsHtml(range, st)}</div>
+      <div class="dp-foot"><button type="button" class="btn btn-plain dp-clear">Clear all</button><span>Tap a day · hold &amp; drag to mark several</span></div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const dp = $(".dp", wrap);
+  const scrim = $(".dp-scrim", wrap);
+  const scroller = $(".dp-scroll", wrap);
+  const sub = $("#dpSub", wrap);
+  const updateSub = () => {
+    sub.textContent = st.yes.size + st.maybe.size ? `${st.yes.size} definitely · ${st.maybe.size} maybe` : "Nothing marked yet";
+  };
+  updateSub();
+  setupSegmented($('[data-seg="dpmode"]', wrap), (v) => (st.mode = v));
+  const painter = attachPainter(scroller, st, () => {
+    updateSub();
+    onChange();
+  });
+
+  // start where it matters: the tapped summary date, the first marked day, or the first open month
+  const target = focusDate || [...st.yes, ...st.maybe].sort()[0] || (todayStr() > range.start ? todayStr() : range.start);
+  const month = $(`[data-month="${target.slice(0, 7)}"]`, scroller);
+  if (month) scroller.scrollTop = month.offsetTop - scroller.offsetTop;
+
+  // ----- presentation: one value drives everything, so motion is always interruptible -----
+  let H = 0;
+  let y = 0; // sheet: px from open position; dialog: unused
+  let p = 0; // dialog: 0 closed .. 1 open
+  let anim = null;
+  let closing = false;
+  const render = () => {
+    if (isDialog) {
+      dp.style.transform = `translate(-50%, -50%) scale(${0.94 + 0.06 * p})`;
+      dp.style.opacity = String(Math.max(0, Math.min(1, p)));
+      scrim.style.opacity = String(Math.max(0, Math.min(1, p)));
+      return;
+    }
+    const t = H ? Math.max(0, Math.min(1, 1 - y / H)) : 1;
+    dp.style.transform = `translate3d(0, ${y}px, 0)`;
+    scrim.style.opacity = String(t);
+    if (parent && !perf.lite) parent.style.transform = `scale(${1 - 0.04 * t})`; // push the parent layer back
+    if (parent) parent.classList.toggle("pushed", t > 0.01); // its glass footer goes solid while it's behind the sheet
+  };
+
+  const finish = () => {
+    wrap.remove();
+    if (parent) parent.style.transform = "";
+    document.removeEventListener("keydown", onKey, true);
+    prevFocus?.focus?.({ preventScroll: true });
+    onClose?.();
+  };
+  const open = () => {
+    if (calm) {
+      wrap.classList.add("calm-in");
+      return;
+    }
+    if (isDialog) {
+      const r = origin?.getBoundingClientRect();
+      const box = dp.getBoundingClientRect();
+      if (r) dp.style.transformOrigin = `${r.left + r.width / 2 - box.left}px ${r.top + r.height / 2 - box.top}px`; // grow from the trigger
+      anim = spring({ from: 0, to: 1, damping: 1, response: 0.32, epsilon: 0.002, onUpdate: (v) => ((p = v), render()) });
+    } else {
+      H = dp.offsetHeight;
+      y = H;
+      render();
+      anim = spring({ from: H, to: 0, damping: 1, response: 0.38, onUpdate: (v) => ((y = v), render()) });
+    }
+  };
+  const close = (velocity = 0) => {
+    if (closing) return;
+    closing = true;
+    anim?.stop();
+    if (calm) {
+      wrap.classList.remove("calm-in");
+      setTimeout(() => closing && finish(), 200);
+      return;
+    }
+    if (isDialog) anim = spring({ from: p, to: 0, damping: 1, response: 0.25, epsilon: 0.004, onUpdate: (v) => ((p = v), render()), onDone: finish });
+    else anim = spring({ from: y, to: H, velocity, damping: 1, response: 0.32, onUpdate: (v) => ((y = v), render()), onDone: finish });
+  };
+
+  // ----- 1:1 drag to dismiss (sheet only) -----
+  if (!isDialog) {
+    let drag = null;
+    const startDrag = (clientY) => {
+      anim?.stop(); // grab it mid-flight: continue from the live value
+      H = dp.offsetHeight;
+      drag = { startY: clientY, from: y, hist: [{ y: clientY, t: performance.now() }] };
+    };
+    const moveDrag = (clientY) => {
+      const raw = drag.from + (clientY - drag.startY);
+      y = raw < 0 ? -rubberband(-raw, H) : raw;
+      drag.hist.push({ y: clientY, t: performance.now() });
+      if (drag.hist.length > 6) drag.hist.shift();
+      render();
+    };
+    const endDrag = () => {
+      const h = drag.hist;
+      const a = h[0];
+      const b = h[h.length - 1];
+      const v = b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0; // px/s at release
+      drag = null;
+      const projected = y + project(v);
+      if (projected > Math.min(H * 0.5, 320)) close(v); // decide from where the gesture is going, not where it stopped
+      else anim = spring({ from: y, to: 0, velocity: v, damping: v < -300 ? 0.8 : 1, response: 0.3, onUpdate: (val) => ((y = val), render()) });
+    };
+    const head = $(".dp-head", wrap);
+    head.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      head.setPointerCapture(e.pointerId);
+      startDrag(e.clientY);
+    });
+    head.addEventListener("pointermove", (e) => drag && moveDrag(e.clientY));
+    head.addEventListener("pointerup", () => drag && endDrag());
+    head.addEventListener("pointercancel", () => drag && endDrag());
+
+    // pulling down when the calendar is already at the top hands the gesture to the sheet
+    let touch = null;
+    scroller.addEventListener("touchstart", (e) => {
+      touch = { y: e.touches[0].clientY, x: e.touches[0].clientX, atTop: scroller.scrollTop <= 0 };
+    }, { passive: true });
+    scroller.addEventListener("touchmove", (e) => {
+      if (!touch || painter.painting) return;
+      const t = e.touches[0];
+      if (!drag) {
+        const dy = t.clientY - touch.y;
+        if (touch.atTop && scroller.scrollTop <= 0 && dy > 10 && Math.abs(dy) > Math.abs(t.clientX - touch.x)) startDrag(t.clientY);
+        else return;
+      }
+      e.preventDefault();
+      moveDrag(t.clientY);
+    }, { passive: false });
+    const touchEnd = () => {
+      touch = null;
+      if (drag) endDrag();
+    };
+    scroller.addEventListener("touchend", touchEnd);
+    scroller.addEventListener("touchcancel", touchEnd);
+  }
+
+  scrim.addEventListener("click", () => close());
+  $(".dp-done", wrap).addEventListener("click", () => close());
+  $(".dp-clear", wrap).addEventListener("click", () => {
+    st.yes.clear();
+    st.maybe.clear();
+    $$(".day.yes, .day.maybe", scroller).forEach((c) => c.classList.remove("yes", "maybe"));
+    updateSub();
+    onChange();
+  });
+  const onKey = (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+    }
+  };
+  document.addEventListener("keydown", onKey, true);
+
+  /** Interrupt a close in flight and bring it back from where it is now. */
+  const reopen = () => {
+    if (!closing) return;
+    closing = false;
+    anim?.stop();
+    if (calm) wrap.classList.add("calm-in");
+    else if (isDialog) anim = spring({ from: p, to: 1, damping: 1, response: 0.32, epsilon: 0.002, onUpdate: (v) => ((p = v), render()) });
+    else anim = spring({ from: y, to: 0, velocity: anim?.velocity || 0, damping: 1, response: 0.35, onUpdate: (v) => ((y = v), render()) });
+  };
+
+  requestAnimationFrame(() => {
+    open();
+    $(".dp-done", wrap).focus({ preventScroll: true });
+  });
+  return { close, reopen };
+}
+
+/* ------------------------------------------------------------------ */
 /* Router                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -360,6 +782,8 @@ window.addEventListener("popstate", route);
 function route() {
   closeSheet(true);
   $(".flow")?.remove();
+  $(".dp-wrap")?.remove();
+  document.body.classList.remove("selecting");
   document.body.style.overflow = "";
   navActions.innerHTML = "";
   window.scrollTo(0, 0);
@@ -628,45 +1052,44 @@ function paintEvent(data, prevTab) {
   const myResponse = mine && responses.find((r) => r.id === mine.id);
   const url = `${location.origin}/e/${event.id}`;
 
-  navActions.innerHTML = `<button class="btn btn-icon" id="navShare" aria-label="Share event">${icon("share")}</button>`;
+  navActions.innerHTML = `<button class="btn btn-tinted nav-share" id="navShare" aria-label="Share event">${icon("share")}<span>Share</span></button>`;
   $("#navShare").onclick = () => shareLink(url, event.title);
 
+  const ctaHtml = myResponse
+    ? `<button class="btn btn-secondary btn-block" data-act="edit">${icon("pencil")} Edit my response</button>`
+    : `<button class="btn btn-primary btn-block" data-act="add">${icon("plus")} Add your availability</button>`;
   app.innerHTML = `
-    <div class="event-head">
-      <div class="fade-in">
-        <div class="eyebrow">${icon("calendar").replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</div>
-        <h1 class="large-title">${esc(event.title)}</h1>
-        ${event.description ? `<p class="subtitle" style="margin:8px 0 0">${esc(event.description)}</p>` : ""}
-        <div class="event-meta">
-          <span class="pill">${icon("people")} ${responses.length} ${responses.length === 1 ? "response" : "responses"}</span>
-          <span class="pill">${icon("pin")} ${current.agg.destinations.length} destinations</span>
-          <span class="pill">${icon("lock")} Locked event</span>
+    <div class="event-layout">
+      <aside class="event-aside">
+        <div class="event-head fade-in">
+          <div class="eyebrow">${icon("calendar").replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</div>
+          <h1 class="large-title">${esc(event.title)}</h1>
+          ${event.description ? `<p class="subtitle">${esc(event.description)}</p>` : ""}
+          <div class="event-meta">
+            <span class="pill">${icon("people")} ${responses.length} ${responses.length === 1 ? "response" : "responses"}</span>
+            <span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>
+            <span class="pill">${icon("lock")} Locked</span>
+          </div>
+          ${responses.length ? `<div class="people-row">${responses.map((r) => avatar(r.name)).join("")}</div>` : ""}
         </div>
-        ${responses.length ? `<div class="people-row">${responses.map((r) => avatar(r.name)).join("")}</div>` : ""}
-      </div>
-      <div class="event-cta fade-in d1">
-        ${
-          myResponse
-            ? `<button class="btn btn-secondary" id="editBtn">${icon("pencil")} Edit my response</button>`
-            : `<button class="btn btn-primary" id="addBtn">${icon("plus")} Add your availability</button>`
-        }
-        <button class="btn btn-secondary" id="shareBtn2">${icon("share")} Share</button>
-      </div>
+        <div class="event-cta fade-in d1">${ctaHtml}</div>
+      </aside>
+      <section class="event-main">
+        <div class="segmented tabs fade-in d2" role="tablist" data-seg="tabs">
+          <span class="thumb"></span>
+          <button type="button" data-value="calendar" aria-pressed="${prevTab === "calendar"}">${icon("calendar").replace("<svg", '<svg width="16" height="16"')} Calendar</button>
+          <button type="button" data-value="destinations" aria-pressed="${prevTab === "destinations"}">${icon("trophy").replace("<svg", '<svg width="16" height="16"')} Places</button>
+          <button type="button" data-value="activities" aria-pressed="${prevTab === "activities"}">${icon("sparkles").replace("<svg", '<svg width="16" height="16"')} Activities</button>
+        </div>
+        <div id="tabBody" class="fade-in d3"></div>
+      </section>
     </div>
-
-    <div class="segmented tabs fade-in d2" role="tablist" data-seg="tabs">
-      <span class="thumb"></span>
-      <button type="button" data-value="calendar" aria-pressed="${prevTab === "calendar"}">${icon("calendar").replace("<svg", '<svg width="16" height="16"')} Calendar</button>
-      <button type="button" data-value="destinations" aria-pressed="${prevTab === "destinations"}">${icon("trophy").replace("<svg", '<svg width="16" height="16"')} Places</button>
-      <button type="button" data-value="activities" aria-pressed="${prevTab === "activities"}">${icon("sparkles").replace("<svg", '<svg width="16" height="16"')} Activities</button>
-    </div>
-    <div id="tabBody" class="fade-in d3"></div>
+    <div class="action-bar" id="actionBar">${ctaHtml}</div>
     <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button><button class="btn btn-primary" id="selShow">Who's free?</button></div>
   `;
 
-  $("#addBtn")?.addEventListener("click", () => openFlow());
-  $("#editBtn")?.addEventListener("click", () => openFlow({ edit: { ...mine, response: myResponse } }));
-  $("#shareBtn2").onclick = () => shareLink(url, event.title);
+  $$('[data-act="add"]').forEach((b) => b.addEventListener("click", () => openFlow()));
+  $$('[data-act="edit"]').forEach((b) => b.addEventListener("click", () => openFlow({ edit: { ...mine, response: myResponse } })));
   setupSegmented($('[data-seg="tabs"]'), (v) => {
     current.tab = v;
     exitSelectMode();
@@ -782,6 +1205,7 @@ function updateSelectBar() {
   const n = current.selected.size;
   $("#selCount").textContent = `${n} ${n === 1 ? "day" : "days"}`;
   bar.classList.toggle("show", current.selectMode && n > 0);
+  document.body.classList.toggle("selecting", current.selectMode);
 }
 
 function openDaySheet(dates) {
@@ -1042,7 +1466,7 @@ function openFlow({ edit = null } = {}) {
     const render = () => {
       const step = STEPS[st.step];
       const el = document.createElement("div");
-      el.className = `flow-step enter${direction < 0 ? " back" : ""}${step === "dates" ? " wide" : ""}`;
+      el.className = `flow-step enter${direction < 0 ? " back" : ""}`;
       el.innerHTML = stepHtml(step);
       body.innerHTML = "";
       body.appendChild(el);
@@ -1069,25 +1493,13 @@ function openFlow({ edit = null } = {}) {
       return `
         <div class="eyebrow">Step 2 of 5</div>
         <h2 class="flow-title">${animatedTitle(`When are you *free,* ${st.name.split(" ")[0]}?`)}</h2>
-        <p class="flow-lead">Tap days to mark them. Dark blue means you're definitely in, light blue means maybe. Press and hold, then drag, to paint many days at once.</p>
-        <div class="picker-tools">
-          <div class="segmented" data-seg="mode" role="group" aria-label="Marking mode">
-            <span class="thumb"></span>
-            <button type="button" data-value="yes" aria-pressed="${st.mode === "yes"}"><span class="swatch yes"></span>Definitely</button>
-            <button type="button" data-value="maybe" aria-pressed="${st.mode === "maybe"}"><span class="swatch maybe"></span>Maybe</button>
-            <button type="button" data-value="erase" aria-pressed="${st.mode === "erase"}"><span class="swatch erase"></span>Erase</button>
-          </div>
-        </div>
-        <div class="picker" id="picker">${monthsHtml(
-          eventRange(event),
-          (date, past) => {
-            if (past) return { attrs: "disabled" };
-            if (st.yes.has(date)) return { cls: "yes" };
-            if (st.maybe.has(date)) return { cls: "maybe" };
-            return {};
-          },
-          { quick: true },
-        )}</div>
+        <p class="flow-lead">Open the calendar and tap the days that work. Dark blue means you're definitely in, light blue means maybe.</p>
+        <button type="button" class="card date-launcher" id="openDays">
+          <span class="feature-icon">${icon("calendar")}</span>
+          <span class="dl-text"><b>Choose your days</b><span>${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</span></span>
+          <span class="dl-chev" aria-hidden="true">›</span>
+        </button>
+        <div class="day-summary" id="daySummary"></div>
       `;
     if (step === "destinations") {
       const names = allDestNames();
@@ -1161,8 +1573,43 @@ function openFlow({ edit = null } = {}) {
       input.addEventListener("keydown", (e) => e.key === "Enter" && st.name.trim() && next());
     }
     if (step === "dates") {
-      setupSegmented($('[data-seg="mode"]', el), (v) => (st.mode = v));
-      bindPicker($("#picker", el));
+      const launcher = $("#openDays", el);
+      const summary = $("#daySummary", el);
+      const renderSummary = () => {
+        const runs = dayRuns(st);
+        summary.innerHTML = runs.length
+          ? `<div class="preview-label">Your days</div><div class="chips">${runs
+              .slice(0, 14)
+              .map((r) => `<button type="button" class="chip run ${r.kind}" data-focus="${r.start}"><span class="swatch ${r.kind}"></span>${esc(fmtRun(r))}</button>`)
+              .join("")}${runs.length > 14 ? `<span class="chip more">+${runs.length - 14} more</span>` : ""}</div>`
+          : `<p class="empty-note">No days marked yet.</p>`;
+        updateChrome();
+      };
+      let picker = null;
+      const openPicker = (focusDate) => {
+        if (picker) return picker.reopen(); // tapped while it was closing: reverse it
+        picker = openDayPicker({
+          range: eventRange(event),
+          st,
+          origin: launcher,
+          focusDate,
+          onChange: renderSummary,
+          onClose: () => {
+            picker = null;
+            renderSummary();
+          },
+        });
+      };
+      launcher.addEventListener("click", () => openPicker());
+      summary.addEventListener("click", (e) => {
+        const chip = e.target.closest("[data-focus]");
+        if (chip) openPicker(chip.dataset.focus);
+      });
+      renderSummary();
+      if (!st.yes.size && !st.maybe.size && !st.pickerShown) {
+        st.pickerShown = true;
+        setTimeout(() => el.isConnected && openPicker(), perf.lite ? 150 : 650); // after the title has landed
+      }
     }
     if (step === "destinations") {
       const input = $("#destInput", el);
@@ -1261,125 +1708,6 @@ function openFlow({ edit = null } = {}) {
         }
       });
     }
-  }
-
-  function bindPicker(root) {
-    let painting = false;
-    let action = null;
-    let timer = null;
-    let start = null;
-    let last = null;
-
-    const setCell = (cell) => {
-      const d = cell.dataset.date;
-      st.yes.delete(d);
-      st.maybe.delete(d);
-      cell.classList.remove("yes", "maybe");
-      if (action === "yes" || action === "maybe") {
-        st[action].add(d);
-        cell.classList.add(action);
-      }
-      updateChrome();
-    };
-    const begin = (cell) => {
-      const d = cell.dataset.date;
-      action = st.mode !== "erase" && st[st.mode].has(d) ? "erase" : st.mode; // tapping a marked day toggles it off
-      last = cell;
-      setCell(cell);
-    };
-    const cellAt = (x, y) => {
-      const el = document.elementFromPoint(x, y);
-      const c = el && el.closest(".day[data-date]");
-      return c && !c.disabled && root.contains(c) ? c : null;
-    };
-
-    root.addEventListener("contextmenu", (e) => e.preventDefault());
-    root.addEventListener("pointerdown", (e) => {
-      const cell = e.target.closest(".day[data-date]");
-      if (!cell || cell.disabled) return;
-      start = { x: e.clientX, y: e.clientY, cell, type: e.pointerType };
-      if (e.pointerType === "mouse" || e.pointerType === "pen") {
-        painting = true;
-        begin(cell);
-      } else {
-        timer = setTimeout(() => {
-          timer = null;
-          painting = true;
-          begin(cell);
-          navigator.vibrate?.(8);
-        }, 230);
-      }
-    });
-    root.addEventListener("pointermove", (e) => {
-      if (!start) return;
-      if (!painting) {
-        if (timer && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) {
-          clearTimeout(timer);
-          timer = null;
-          start = null; // user is scrolling
-        }
-        return;
-      }
-      const c = cellAt(e.clientX, e.clientY);
-      if (c && c !== last) {
-        last = c;
-        setCell(c);
-      }
-    });
-    const end = (e) => {
-      if (start && timer && e.type === "pointerup") {
-        clearTimeout(timer);
-        timer = null;
-        begin(start.cell); // a quick tap
-      }
-      clearTimeout(timer);
-      timer = null;
-      painting = false;
-      start = null;
-    };
-    window.addEventListener("pointerup", end);
-    root.addEventListener("pointercancel", (e) => {
-      if (!painting) end(e);
-    });
-    // While painting with a finger, stop the page from scrolling and keep painting from touch coordinates
-    // (some browsers stop sending pointer events once a touch starts moving).
-    root.addEventListener(
-      "touchmove",
-      (e) => {
-        if (!painting) return;
-        e.preventDefault();
-        const t = e.touches[0];
-        const c = t && cellAt(t.clientX, t.clientY);
-        if (c && c !== last) {
-          last = c;
-          setCell(c);
-        }
-      },
-      { passive: false },
-    );
-    root.addEventListener("touchend", () => {
-      if (painting) {
-        painting = false;
-        start = null;
-      }
-    });
-    root.addEventListener("click", (e) => {
-      const fill = e.target.closest("[data-fill]");
-      const clear = e.target.closest("[data-clear]");
-      if (!fill && !clear) return;
-      const m = (fill || clear).closest(".month");
-      $$(".day[data-date]:not([disabled])", m).forEach((c) => {
-        action = clear || st.mode === "erase" ? "erase" : st.mode;
-        setCell(c);
-      });
-    });
-    // keyboard: Enter/Space handled by native click on button
-    root.addEventListener("keydown", (e) => {
-      if ((e.key === "Enter" || e.key === " ") && e.target.matches(".day[data-date]")) {
-        e.preventDefault();
-        begin(e.target);
-      }
-    });
   }
 
   async function submit() {

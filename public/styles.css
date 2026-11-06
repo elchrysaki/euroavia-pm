@@ -990,3 +990,163 @@ html[data-perf="lite"] {
 }
 html[data-perf="lite"] .day { box-shadow: inset 0 1px 0 var(--hl), 0 0 0 0.5px rgba(0, 0, 0, 0.08); }
 html[data-perf="lite"] .day.past, html[data-perf="lite"] .day.blank, html[data-perf="lite"] .day.out { box-shadow: none; }
+
+/* =====================================================================
+   LAYOUT, SPACING & DAY PICKER — apple-design skill
+   (Flexibility: phone = quick touch, tablet = room for two columns,
+   desktop = side panel + content. Craft: one spacing scale in rem.)
+   ===================================================================== */
+:root {
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.25rem;
+  --sp-6: 1.5rem; --sp-7: 2rem; --sp-8: 2.5rem; --sp-9: 3.5rem;
+  --nav-h: 3.5rem;
+}
+body { font-optical-sizing: auto; }
+.subtitle { line-height: 1.47; letter-spacing: -0.008em; }
+.section-header, .preview-label { letter-spacing: .06em; }
+
+.app { padding: var(--sp-2) calc(var(--sp-4) + var(--safe-r)) calc(var(--sp-9) + var(--sp-7) + var(--safe-b)) calc(var(--sp-4) + var(--safe-l)); }
+@media (min-width: 640px) { .app { padding-left: var(--sp-7); padding-right: var(--sp-7); } }
+@media (min-width: 1024px) { .app { max-width: 1280px; padding-left: var(--sp-8); padding-right: var(--sp-8); } }
+
+/* ---------- Event page ---------- */
+.event-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); }
+.event-head { display: block; margin: var(--sp-4) 0 0; }
+.event-head .large-title { margin: var(--sp-1) 0 0; }
+.event-head .subtitle { margin: var(--sp-2) 0 0; }
+.event-meta { margin-top: var(--sp-4); gap: var(--sp-2); }
+.people-row { margin-top: var(--sp-3); }
+.event-cta { display: flex; margin-top: var(--sp-5); }
+.tabs { margin: 0 0 var(--sp-5); max-width: none; }
+.action-bar { display: none; }
+.nav-share { gap: var(--sp-2); }
+
+/* Phone: primary action in the thumb zone, on translucent chrome that content scrolls under */
+@media (max-width: 639px) {
+  .event-cta { display: none; }
+  .action-bar {
+    display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    padding: var(--sp-3) calc(var(--sp-4) + var(--safe-r)) calc(var(--sp-3) + var(--safe-b)) calc(var(--sp-4) + var(--safe-l));
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+    box-shadow: inset 0 1px 0 var(--hl-soft), 0 -1px 0 rgba(0, 0, 0, 0.05);
+    transition: transform .3s var(--ease);
+  }
+  body.selecting .action-bar { transform: translateY(110%); }
+  .nav-share { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; }
+  .nav-share span { display: none; }
+  .perf-footer { padding-bottom: calc(6rem + var(--safe-b)); }
+}
+html[data-perf="lite"] .action-bar { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Tablet: action sits with the event it belongs to; two months per row */
+@media (min-width: 640px) {
+  .event-cta .btn { width: auto; min-width: 18rem; }
+  .tabs { max-width: 32rem; }
+}
+@media (min-width: 640px) and (max-width: 899px) {
+  #createForm { width: 100%; max-width: 36rem; justify-self: center; }
+}
+
+/* Desktop: sticky side panel for the event, content to the right */
+@media (min-width: 1024px) {
+  .event-layout { grid-template-columns: 21rem minmax(0, 1fr); gap: var(--sp-8); align-items: start; padding-top: var(--sp-5); }
+  .event-aside { position: sticky; top: calc(var(--nav-h) + var(--sp-6)); }
+  .event-head { margin-top: 0; }
+  .event-aside .large-title { font-size: 2.5rem; letter-spacing: -0.03em; }
+  .event-cta .btn { width: 100%; min-width: 0; }
+  .event-main .months { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tabs { max-width: none; }
+}
+@media (min-width: 1360px) { .event-main .months { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------- Availability step: launcher + summary ---------- */
+.date-launcher {
+  display: flex; align-items: center; gap: var(--sp-4); width: 100%; min-height: 4.5rem;
+  padding: var(--sp-4) var(--sp-5); text-align: left; cursor: pointer; font: inherit; color: inherit;
+  transition: transform .1s ease-out;
+}
+.date-launcher:active { transform: scale(.98); }
+.dl-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dl-text b { font-size: 1.0625rem; letter-spacing: -0.01em; }
+.dl-text span { font-size: .875rem; color: var(--label-2); }
+.dl-chev { font-size: 1.75rem; line-height: 1; color: var(--label-3); }
+.day-summary { margin-top: var(--sp-5); }
+.empty-note { color: var(--label-2); margin: var(--sp-4) var(--sp-1); }
+.chip.run { font-variant-numeric: tabular-nums; }
+.chip.more { color: var(--label-2); }
+
+/* instant touch-down feedback on days */
+.day.pressing { transform: scale(.9); transition: transform 100ms ease-out; }
+
+/* ---------- Day picker (sheet on touch, dialog on desktop) ---------- */
+.dp-wrap { position: fixed; inset: 0; z-index: 80; }
+.dp-scrim { position: absolute; inset: 0; background: rgba(5, 20, 45, 0.38); opacity: 0; }
+.dp {
+  position: absolute; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--brush), linear-gradient(180deg, var(--alu-a), var(--alu-b));
+  box-shadow: var(--sh-hero); will-change: transform;
+}
+.is-sheet .dp {
+  left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 44rem;
+  height: min(92dvh, 52rem); border-radius: 1.5rem 1.5rem 0 0;
+  transform: translate3d(0, 100%, 0); padding-bottom: var(--safe-b);
+}
+.is-dialog .dp {
+  left: 50%; top: 50%; width: min(34rem, calc(100vw - 4rem)); height: min(82vh, 46rem);
+  border-radius: 1.5rem; transform: translate(-50%, -50%) scale(.94); opacity: 0;
+}
+.is-dialog .grabber { display: none; }
+.dp-head { flex: none; position: relative; z-index: 2; padding: var(--sp-2) var(--sp-5) 0; touch-action: none; cursor: grab; }
+.is-dialog .dp-head { cursor: default; padding-top: var(--sp-5); }
+.dp-head::after { /* scroll-edge fade instead of a hard divider */
+  content: ""; position: absolute; left: 0; right: 0; bottom: -0.875rem; height: 0.875rem; pointer-events: none;
+  background: linear-gradient(var(--alu-a), transparent);
+}
+.dp .grabber { margin-bottom: var(--sp-2); }
+.dp-titlebar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.dp-titlebar h2 { margin: 0; font-size: 1.375rem; letter-spacing: -0.02em; }
+.dp-sub { margin: 2px 0 0; font-size: .875rem; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.dp-done { min-height: 2.75rem; padding: 0 var(--sp-5); border-radius: 999px; font-size: 1rem; flex: none; }
+.dp-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: var(--sp-4); padding-bottom: var(--sp-2);
+  font-size: 12px; font-weight: 600; color: var(--label-3); text-align: center; text-shadow: var(--engrave);
+}
+.dp-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: var(--sp-2) var(--sp-5) var(--sp-7); }
+.dp-scroll:focus { outline: none; }
+.dp-month { padding-bottom: var(--sp-5); }
+.dp-mtitle {
+  position: sticky; top: calc(-1 * var(--sp-2)); z-index: 1;
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 0 var(--sp-2); padding: var(--sp-3) 0 var(--sp-2);
+  font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em;
+  background: linear-gradient(var(--alu-a) 78%, transparent);
+}
+.dp-mtitle em { font-style: normal; font-weight: 600; color: var(--label-3); }
+.dp .days { gap: 6px; }
+.dp .day { aspect-ratio: auto; height: clamp(2.75rem, 11vw, 3.25rem); font-size: 1rem; }
+.dp-foot {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-4) var(--sp-2); font-size: .8125rem; color: var(--label-2);
+  border-top: .5px solid var(--separator);
+}
+.dp-foot .btn-plain { min-height: 44px; padding: 0 var(--sp-2); font-size: .9375rem; }
+/* Reduced motion: cross-fade instead of slide/scale */
+.dp-wrap.calm .dp, .dp-wrap.calm .dp-scrim { opacity: 0; transition: opacity .2s ease; }
+.is-sheet.calm .dp { transform: none; }
+.is-dialog.calm .dp { transform: translate(-50%, -50%); }
+.dp-wrap.calm-in .dp, .dp-wrap.calm-in .dp-scrim { opacity: 1; }
+
+/* Day picker performance: ~180 keys scroll here, so keys keep their bevel but skip blurred
+   drop shadows, off-screen months skip rendering, and the sheet uses a plain metal gradient. */
+.dp { background: linear-gradient(180deg, var(--alu-a), var(--alu-b)); }
+.dp-month { content-visibility: auto; contain-intrinsic-block-size: auto 22rem; }
+.dp .day { box-shadow: inset 0 1px 0 var(--hl), inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.10); transition: none; }
+.dp .day.past, .dp .day.blank, .dp .day.out { box-shadow: none; }
+.dp .day.yes { box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.28), inset 0 -1px 0 rgba(225, 242, 255, 0.24), 0 0 0 0.5px rgba(0, 0, 0, 0.32); }
+.dp .day.pressing { transition: transform 100ms ease-out; }
+.dp-scroll { contain: strict; }
+/* A layer pushed behind the picker doesn't need live glass: re-blurring it every frame of the
+   push-back animation is what made opening slow on mid-range phones. */
+.flow.pushed .flow-bottom { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg); }
+.flow.pushed { will-change: transform; }
