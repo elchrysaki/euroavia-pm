@@ -1,6 +1,6 @@
-# Convene
+# Wingman
 
-A no-login group planner for phone, tablet and desktop. It works like When2meet or Lettucemeet, and adds destination voting and activity ideas.
+A EUROAVIA no-login group planner for phone, tablet and desktop. It works like When2meet or Lettucemeet, and adds destination voting and activity ideas.
 
 1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
 2. **Share the link.** Each person goes through a short animated flow:

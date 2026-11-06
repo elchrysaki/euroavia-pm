@@ -1,4 +1,4 @@
-// Convene — Cloudflare Worker API.
+// Wingman — Cloudflare Worker API.
 // Static files in /public are served by the assets binding; this worker only handles /api/*.
 
 const LIMITS = {
