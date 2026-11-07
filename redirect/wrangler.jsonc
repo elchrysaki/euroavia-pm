@@ -1,0 +1,7 @@
+// Deploys the redirect from the old address. Run from the repo root:
+//   npx wrangler deploy -c redirect/wrangler.jsonc
+{
+  "name": "euroavia-pm",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01"
+}

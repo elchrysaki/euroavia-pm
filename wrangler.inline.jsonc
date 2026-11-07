@@ -2,7 +2,7 @@
 // Same Worker and database as wrangler.jsonc; the site's files are embedded in the script.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "euroavia-pm",
+  "name": "wingman",
   "main": "dist/inline-worker.js",
   "compatibility_date": "2026-10-01",
   "d1_databases": [

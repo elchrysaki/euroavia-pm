@@ -105,6 +105,10 @@ node scripts/build-inline.mjs && npx wrangler deploy -c wrangler.inline.jsonc
 
 The API token needs **Workers Scripts: Edit** (plus **D1: Edit** for database fixes and **Workers CI: Read** for build logs).
 
+### Address
+
+The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman`). The old address, `euroavia-pm.euroavia.workers.dev`, is a tiny separate Worker in `redirect/` that forwards every link, path included, to the new one. Redeploy it with `npx wrangler deploy -c redirect/wrangler.jsonc`.
+
 ## API
 
 | Method | Path | Body |
