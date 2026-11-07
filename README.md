@@ -107,7 +107,7 @@ The API token needs **Workers Scripts: Edit** (plus **D1: Edit** for database fi
 
 ### Address
 
-The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman`). The old address, `euroavia-pm.euroavia.workers.dev`, is a tiny separate Worker in `redirect/` that forwards every link, path included, to the new one. Redeploy it with `npx wrangler deploy -c redirect/wrangler.jsonc`.
+The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman`).
 
 ## API
 
