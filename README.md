@@ -90,6 +90,16 @@ npm run deploy     # applies remote migrations, then deploys the worker + assets
 
 You can also connect the GitHub repo in **Cloudflare dashboard → Workers & Pages → Create → Import a repository**. Use build command `npx wrangler d1 migrations apply convene-db --remote` (optional) and deploy command `npx wrangler deploy`.
 
+### Deploying from a proxied environment (e.g. Claude Code on the web)
+
+If `npx wrangler deploy` fails at the asset upload with `401 Unauthorized` on `/workers/assets/upload`, the network proxy is replacing wrangler's one-time upload key with your API token. Deploy with the site's files embedded in the Worker instead (same Worker, same database):
+
+```bash
+node scripts/build-inline.mjs && npx wrangler deploy -c wrangler.inline.jsonc
+```
+
+The API token needs **Workers Scripts: Edit** (plus **D1: Edit** for database fixes and **Workers CI: Read** for build logs).
+
 ## API
 
 | Method | Path | Body |

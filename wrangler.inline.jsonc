@@ -1,0 +1,17 @@
+// Deploy config for environments where static-asset uploads fail (see scripts/build-inline.mjs).
+// Same Worker and database as wrangler.jsonc; the site's files are embedded in the script.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "euroavia-pm",
+  "main": "dist/inline-worker.js",
+  "compatibility_date": "2026-10-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "convene-db",
+      "database_id": "a36ee674-1572-45b3-8574-990f1819a5b3",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+}
