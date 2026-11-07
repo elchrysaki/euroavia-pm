@@ -25,10 +25,15 @@ The site picks one of two visual modes **before the first paint** (a small inlin
 - **Full effects:** frosted glass on the bars and sheets, animated background, word-by-word headings, shimmer and glint.
 - **Smooth mode:** same layout and colours, with no backdrop blur, no infinite or filter-based animations, and shorter transitions.
 
-Smooth mode is used when any of these are true (first match wins):
+The choice is fully automatic and never shown to visitors. Smooth mode is used when any of these are true (first match wins):
 
-1. `?perf=lite` / `?perf=full` in the URL, or the person tapped the footer toggle. This choice is remembered (`?perf=auto` clears it).
-2. A frame-rate check in the last 7 days found this device dropping frames. The check samples ~1s of frames at startup and when the guided flow first opens.
+1. `?perf=lite` / `?perf=full` is in the URL. This is a developer override for testing and isn't remembered.
+2. This device was measured as too slow in the last 7 days. On startup, and again when the guided flow first opens, the site measures:
+   - **dropped frames** against the screen's own refresh rate, so a phone capped at 30 fps by Low Power Mode isn't penalised
+   - **start-up work time**: how long the browser took to parse and run the page after downloading it
+   - **main-thread blocking**: long tasks that make taps feel late
+
+   If full effects are too heavy, the site switches quietly. The result is kept for 7 days, then measured again.
 3. Reduce Motion or Reduce Transparency is on, Data Saver is on, or the connection is 2G/3G. The mode also switches mid-visit if the connection drops.
 4. The device is low-end (≤ 2 GB RAM, ≤ 2 cores, or < 4 GB with ≤ 4 cores), or the browser has no `backdrop-filter`.
 

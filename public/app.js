@@ -38,10 +38,12 @@ const store = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Performance mode                                                    */
-/* "full" = glass + long animations, "lite" = smooth mode. The initial  */
-/* choice is made in index.html before first paint; here we can only   */
-/* downgrade (frame probe, connection change) or apply a user choice.  */
+/* Performance mode — fully automatic, never shown to the user.        */
+/* "full" = glass + long animations, "lite" = smooth mode. index.html  */
+/* picks a mode before first paint; here we measure how this device    */
+/* actually loads and renders, and quietly switch to smooth mode when  */
+/* full effects are too heavy. The result is remembered for 7 days,   */
+/* then measured again (browsers and devices change).                  */
 /* ------------------------------------------------------------------ */
 
 const root = document.documentElement;
@@ -58,64 +60,92 @@ const perf = {
   set(mode, reason) {
     root.dataset.perf = mode;
     root.dataset.perfReason = reason;
-    renderPerfToggle();
   },
 };
+const measurable = () => !perf.lite && perf.reason !== "override";
 
-const PERF_REASONS = {
-  "slow-frames": "to keep scrolling smooth",
-  "reduced-motion": "because Reduce Motion is on",
-  "reduced-transparency": "because Reduce Transparency is on",
-  "data-saver": "because Data Saver is on",
-  "slow-network": "on this slow connection",
-  "low-memory": "on this device",
-  "few-cores": "on this device",
-  "low-end": "on this device",
-  "old-browser": "in this browser",
-};
-
-function renderPerfToggle() {
-  const btn = document.getElementById("perfToggle");
-  if (!btn) return;
-  btn.hidden = false;
-  btn.innerHTML = perf.lite
-    ? `${icon("bolt")}<span>Smooth mode ${PERF_REASONS[perf.reason] || ""} · <b>Turn on full effects</b></span>`
-    : `${icon("sparkles")}<span>Full effects · <b>Switch to smooth mode</b></span>`;
+function remember(mode, stats) {
+  store.setRaw("convene:perf-auto", JSON.stringify({ mode, at: Date.now(), stats }));
 }
 
-function setPerfByUser(mode) {
-  store.setRaw("convene:perf", mode);
-  perf.set(mode, "user");
+/**
+ * Records ~frames of rendering. Judges smoothness against the screen's own pace (its fastest
+ * steady frames), so a phone capped at 30fps by Low Power Mode isn't mistaken for a struggling one.
+ */
+function sampleFrames(frames) {
+  return new Promise((resolve) => {
+    const deltas = [];
+    let last = 0;
+    const step = (t) => {
+      if (document.visibilityState !== "visible") return resolve(null); // background tabs are throttled: no verdict
+      if (last) deltas.push(t - last);
+      last = t;
+      if (deltas.length < frames) return void requestAnimationFrame(step);
+      const sorted = [...deltas].sort((a, b) => a - b);
+      const pace = sorted[Math.floor(sorted.length * 0.1)]; // the display's natural frame interval
+      const dropped = deltas.filter((d) => d > pace * 1.6).length / deltas.length; // frames that missed it
+      resolve({ median: sorted[sorted.length >> 1], pace, janky: dropped, struggling: dropped > 0.25 || sorted[sorted.length >> 1] > 45 });
+    };
+    requestAnimationFrame(step);
+  });
 }
 
-/** Watches ~1s of frames; if the device drops many, switch to smooth mode (and remember for 7 days). */
-let probing = false;
-function probeFrames(frames = 48) {
-  if (probing || perf.lite || perf.reason === "user" || document.visibilityState !== "visible") return;
-  probing = true;
-  const deltas = [];
-  let last = 0;
-  const step = (t) => {
-    if (document.visibilityState !== "visible") return void (probing = false); // rAF is throttled in background tabs
-    if (last) deltas.push(t - last);
-    last = t;
-    if (deltas.length < frames) return void requestAnimationFrame(step);
-    probing = false;
-    const sorted = [...deltas].sort((a, b) => a - b);
-    const median = sorted[sorted.length >> 1];
-    const janky = deltas.filter((d) => d > 50).length / deltas.length;
-    if (median > 28 || janky > 0.2) {
-      store.setRaw("convene:perf-auto", String(Date.now()));
-      perf.set("lite", "slow-frames");
-      toast("Switched to smooth mode for this device");
-    }
+/** Main-thread time blocked by long frames/tasks (Chromium; 0 where unsupported). */
+const blocked = { ms: 0 };
+for (const type of ["long-animation-frame", "longtask"]) {
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) blocked.ms += e.blockingDuration ?? Math.max(0, e.duration - 50);
+    }).observe({ type, buffered: true });
+    break;
+  } catch {
+    /* not supported: try the next one */
+  }
+}
+
+/**
+ * Startup measurement: how long this device took to turn the downloaded page into a working app,
+ * how much the main thread was blocked, and how smoothly the opening animations render.
+ */
+async function measureDevice() {
+  if (!measurable()) return;
+  const frames = await sampleFrames(48);
+  if (!frames || !measurable()) return;
+  const nav = performance.getEntriesByType?.("navigation")[0];
+  const stats = {
+    frameMedian: Math.round(frames.median * 10) / 10,
+    framePace: Math.round(frames.pace * 10) / 10,
+    jankyPct: Math.round(frames.janky * 100),
+    loadWorkMs: nav ? Math.round(nav.domContentLoadedEventEnd - nav.responseEnd) : null, // parse + run + first render
+    networkMs: nav ? Math.round(nav.responseEnd - nav.requestStart) : null,
+    blockedMs: Math.round(blocked.ms),
   };
-  requestAnimationFrame(step);
+  let score = 0;
+  if (frames.struggling) score += 2; // drops >25% of frames vs. its own screen pace, or below ~22fps
+  if (stats.loadWorkMs != null && stats.loadWorkMs > 500) score += 1; // slow to start up
+  if (stats.blockedMs > 400) score += 1; // main thread busy → taps feel late
+  if (score >= 2) {
+    perf.set("lite", "measured");
+    remember("lite", stats);
+  } else if (perf.reason === "default") {
+    remember("full", stats);
+  }
+  window.__wingmanPerf = { mode: perf.mode, reason: perf.reason, score, ...stats }; // for debugging only
+}
+
+/** The availability flow is the most animated screen: check it once more the first time it opens. */
+async function probeFlow() {
+  if (!measurable()) return;
+  const frames = await sampleFrames(40);
+  if (frames && measurable() && frames.struggling) {
+    perf.set("lite", "measured");
+    remember("lite", { flowFrameMedian: Math.round(frames.median * 10) / 10, flowJankyPct: Math.round(frames.janky * 100) });
+  }
 }
 
 const conn = navigator.connection;
 conn?.addEventListener?.("change", () => {
-  if (perf.lite || perf.reason === "user") return;
+  if (!measurable()) return;
   if (conn.saveData) perf.set("lite", "data-saver");
   else if (/(^|-)2g|3g/.test(conn.effectiveType || "")) perf.set("lite", "slow-network");
 });
@@ -1384,7 +1414,7 @@ let flowProbed = false;
 function openFlow({ edit = null } = {}) {
   if (!flowProbed) {
     flowProbed = true;
-    setTimeout(() => probeFrames(40), 120); // the flow is the most animated screen
+    setTimeout(probeFlow, 120); // the flow is the most animated screen
   }
   const { event, responses } = current;
   const others = aggregate(responses, { excludeId: edit?.id });
@@ -1775,7 +1805,5 @@ function burst() {
   setTimeout(() => wrap.remove(), 1600);
 }
 
-$("#perfToggle").addEventListener("click", () => setPerfByUser(perf.lite ? "full" : "lite"));
-renderPerfToggle();
 route();
-requestAnimationFrame(() => probeFrames());
+requestAnimationFrame(measureDevice);
