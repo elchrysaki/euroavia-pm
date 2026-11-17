@@ -1190,21 +1190,21 @@ html[data-perf="lite"] .action-bar { background: var(--bg); -webkit-backdrop-fil
 
 /* =====================================================================
    IDENTITY & CALMER MOTION (after Blitz)
-   - Bricolage Grotesque for headlines and numbers; system text for the rest (Apple feel kept)
-   - one warm accent, "beacon orange", reserved for wins and the best result
+   - system font throughout (apple-design); headlines/numbers use tight, size-specific tracking
+   - rewards and the best result use the existing blue anodized accent (no new colours)
    - aviation motifs: boarding-pass header, route line, departure-board dates
    - springs that settle WITHOUT overshoot; no blur, tilt or pop-in
    ===================================================================== */
-@font-face { font-family: "Bricolage Grotesque"; src: url(/fonts/bricolage-grotesque.woff2) format("woff2"); font-weight: 500 800; font-style: normal; font-display: swap; }
+/* (headlines use the system font: San Francisco on Apple devices, per the apple-design skill) */
 :root {
-  --display: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --beacon: #ff6a2b;
-  --beacon-ink: #c2410c;
+  --display: var(--font);
+  /* rewards and the best result use the existing blue anodized accent (2 accents max: blue + electric) */
+  --beacon: var(--ano-b);
+  --beacon-ink: var(--accent);
   /* Apple-style critically damped spring sampled for CSS (from Blitz): settles, never overshoots */
   --spring: linear(0, 0.034 1.5%, 0.127 3.4%, 0.416 8.6%, 0.627 13.4%, 0.775 18.4%, 0.875 23.6%, 0.939 29.1%, 0.976 35.1%, 0.995 42.4%, 1.002 53%, 1);
   --ease: cubic-bezier(.23, 1, .32, 1);
 }
-@media (prefers-color-scheme: dark) { :root { --beacon: #ff7a45; --beacon-ink: #ffb08a; } }
 
 .large-title, .flow-title, .section-title, .sheet h2, .dp-titlebar h2, .tally b, .votes, .summary .big,
 .best-card .date, .verdict-date, .boarding-title, .boarding-stats b, .brand > span:last-child, .board-item .medal, .route b {
@@ -1297,3 +1297,32 @@ html[data-perf="lite"] .action-bar { background: var(--bg); -webkit-backdrop-fil
 /* sheets are solid brushed metal (like the date picker): big text behind them never shows through */
 .sheet { background: linear-gradient(180deg, var(--alu-a), var(--alu-b)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .boarding .pass-row { margin-bottom: var(--sp-2); }
+
+/* =====================================================================
+   Consistency pass: the "level up" pieces rendered in the same glass/metal system
+   ===================================================================== */
+/* verdict: anodized-blue edge and meter instead of a new colour */
+.verdict::before { background: linear-gradient(180deg, var(--ano-a), var(--ano-c)); width: 5px; }
+.verdict-meter i { background: linear-gradient(180deg, var(--ano-a), var(--ano-b) 50%, var(--ano-c)); box-shadow: inset 0 1px 0 var(--ano-hl); }
+.verdict-label { color: var(--accent); }
+
+/* departure-board dates as small brushed-aluminium keys */
+.flap span {
+  color: var(--label); text-shadow: var(--engrave);
+  background: linear-gradient(180deg, var(--key-a) 0 49%, var(--key-c) 51% 100%);
+  box-shadow: var(--sh-key-sm);
+}
+
+/* route + perforation as engraved grooves in the metal, not dashes */
+.route-line { height: 3px; border-radius: 2px; background: linear-gradient(180deg, var(--well-a), var(--well-b)); box-shadow: var(--sh-channel); }
+.route-line svg { background: linear-gradient(180deg, var(--key-a), var(--key-c)); box-shadow: var(--sh-key-sm); padding: 4px; width: 26px; height: 26px; }
+.pass-perf { border-top: 0; height: 2px; border-radius: 1px; background: linear-gradient(180deg, rgba(0,0,0,0.10), var(--hl)); }
+
+/* sheets: back to frosted glass, but a thicker material (bigger surface = thicker), so
+   large text behind never reads through; smooth mode / reduced transparency stay solid */
+.sheet {
+  background: color-mix(in srgb, var(--alu-a) 90%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(40px); backdrop-filter: saturate(180%) blur(40px);
+}
+html[data-perf="lite"] .sheet { background: var(--solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (prefers-reduced-transparency: reduce) { .sheet { background: var(--solid); -webkit-backdrop-filter: none; backdrop-filter: none; } }

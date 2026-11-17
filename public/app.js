@@ -2051,7 +2051,7 @@ const buzz = (pattern) => {
 
 function confettiFall(n = 70) {
   if (calm()) return;
-  const colors = ["var(--beacon)", "#1d8bff", "#0a46c9", "#9fd4ff", "#dfe8f2"];
+  const colors = ["var(--electric)", "#1d8bff", "#0a46c9", "#9fd4ff", "#dfe8f2", "#ffffff"]; // the app palette: blues, ice, silver
   const wrap = document.createElement("div");
   wrap.className = "confetti";
   wrap.setAttribute("aria-hidden", "true");
