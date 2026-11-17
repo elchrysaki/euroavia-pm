@@ -167,6 +167,7 @@ const icon = (name) => {
     pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4.5a3 3 0 0 0 3.5 4M16 6h3.5a3 3 0 0 1-3.5 4M12 13v4M8.5 20.5h7M9.5 17h5v3.5h-5z"/>',
     bolt: '<path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/>',
+    plane: '<path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0v5l-8 5v2l8-2.5v5l-2 1.5V21l3.5-1 3.5 1v-1.5l-2-1.5v-5z"/>',
     grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
   };
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ""}</svg>`;
@@ -720,7 +721,7 @@ function openDayPicker({ range, st, origin, focusDate, onChange, onClose }) {
       drag = null;
       const projected = y + project(v);
       if (projected > Math.min(H * 0.5, 320)) close(v); // decide from where the gesture is going, not where it stopped
-      else anim = spring({ from: y, to: 0, velocity: v, damping: v < -300 ? 0.8 : 1, response: 0.3, onUpdate: (val) => ((y = val), render()) });
+      else anim = spring({ from: y, to: 0, velocity: v, damping: 1, response: 0.3, onUpdate: (val) => ((y = val), render()) });
     };
     const head = $(".dp-head", wrap);
     head.addEventListener("pointerdown", (e) => {
@@ -1092,10 +1093,16 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   app.innerHTML = `
     <div class="event-layout">
       <aside class="event-aside">
-        <div class="event-head fade-in">
-          <div class="eyebrow">${icon("calendar").replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</div>
+        <div class="event-head pass-card fade-in">
+          <div class="pass-row"><span class="pass-airline">${icon("plane")} Wingman</span><span class="pass-code">Flight WM-${esc(event.id.slice(0, 4).toUpperCase())}</span></div>
           <h1 class="large-title">${esc(event.title)}</h1>
           ${event.description ? `<p class="subtitle">${esc(event.description)}</p>` : ""}
+          <div class="route">
+            <div><small>Earliest</small><b>${esc(fmtDate(eventRange(event).start, { day: "numeric", month: "short" }))}</b><span>${eventRange(event).start.slice(0, 4)}</span></div>
+            <span class="route-line" aria-hidden="true">${icon("plane")}</span>
+            <div class="r"><small>Latest</small><b>${esc(fmtDate(eventRange(event).end, { day: "numeric", month: "short" }))}</b><span>${eventRange(event).end.slice(0, 4)}</span></div>
+          </div>
+          <div class="pass-perf" aria-hidden="true"></div>
           <div class="event-meta">
             <span class="pill">${icon("people")} ${responses.length} ${responses.length === 1 ? "response" : "responses"}</span>
             <span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>
@@ -1177,13 +1184,34 @@ function calendarHtml() {
       ${monthsHtml(eventRange(event), () => ({}))}`;
   }
 
+  const top = best[0];
+  const flap = (d) =>
+    parseDate(d)
+      .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" })
+      .replace(",", "")
+      .toUpperCase()
+      .split(" ")
+      .map((w) => `<span>${esc(w)}</span>`)
+      .join("");
   return `
     ${
-      best.length
-        ? `<div class="section-header" style="margin-top:4px">Best dates</div>
+      top
+        ? `<div class="card verdict">
+        <div class="verdict-label">${icon("plane")} Best date so far</div>
+        <div class="verdict-date">${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</div>
+        <div class="verdict-sub"><b>${top.s.yes.length + top.s.maybe.length} of ${n}</b> can make it · ${top.s.yes.length} definitely</div>
+        <div class="verdict-meter" aria-hidden="true"><i style="width:${Math.round(((top.s.yes.length + top.s.maybe.length) / n) * 100)}%"></i></div>
+        <button class="btn btn-tinted" data-best="${top.d}">See who's in</button>
+      </div>`
+        : ""
+    }
+    ${
+      best.length > 1
+        ? `<div class="section-header">Next best</div>
       <div class="best">${best
+        .slice(1)
         .map(
-          (b, i) => `<button class="best-card" data-best="${b.d}"><div class="rank">#${i + 1}</div><div class="date">${esc(fmtDate(b.d))}</div><div class="counts">${b.s.yes.length} yes · ${b.s.maybe.length} maybe</div></button>`,
+          (b, i) => `<button class="best-card" data-best="${b.d}"><div class="rank">#${i + 2}</div><div class="date flap">${flap(b.d)}</div><div class="counts">${b.s.yes.length + b.s.maybe.length}/${n} · ${b.s.yes.length} sure</div></button>`,
         )
         .join("")}</div>`
         : ""
@@ -1443,7 +1471,7 @@ function askName() {
  * Uses your existing response from this device, or creates one with just a name.
  */
 let quickBusy = false;
-async function quickSave(mutate) {
+async function quickSave(mutate, { after } = {}) {
   if (quickBusy) return;
   quickBusy = true;
   try {
@@ -1467,6 +1495,8 @@ async function quickSave(mutate) {
     }
     await renderEvent(event.id, { keepTab: true, quiet: true });
     window.scrollTo(0, y);
+    buzz(12);
+    after?.();
   } catch (err) {
     toast(err.message, { error: true });
   } finally {
@@ -1483,12 +1513,27 @@ function bindQuickActions() {
     if (vote) {
       const name = vote.dataset.vote;
       vote.setAttribute("aria-pressed", String(vote.getAttribute("aria-pressed") !== "true")); // instant feedback
-      return quickSave((d) => {
-        const i = d.destinations.findIndex((x) => x.toLowerCase() === name.toLowerCase());
-        if (i >= 0) d.destinations.splice(i, 1);
-        else if (d.destinations.length >= 10) return void toast("Up to 10 places per person", { error: true }) ?? false;
-        else d.destinations.push(name);
-      });
+      const wasTop = current.agg.destinations[0]?.name.toLowerCase() === name.toLowerCase();
+      let added = false;
+      return quickSave(
+        (d) => {
+          const i = d.destinations.findIndex((x) => x.toLowerCase() === name.toLowerCase());
+          if (i >= 0) d.destinations.splice(i, 1);
+          else if (d.destinations.length >= 10) return void toast("Up to 10 places per person", { error: true }) ?? false;
+          else (d.destinations.push(name), (added = true));
+        },
+        {
+          after: () => {
+            const btn = $$("[data-vote]").find((b) => b.dataset.vote.toLowerCase() === name.toLowerCase());
+            btn?.closest(".board-item")?.querySelector(".votes")?.classList.add("bump");
+            const nowTop = current.agg.destinations[0]?.name.toLowerCase() === name.toLowerCase();
+            if (added && nowTop && !wasTop) {
+              toast(`${name} just took the lead`);
+              buzz([15, 60, 15]);
+            }
+          },
+        },
+      );
     }
     const like = e.target.closest("[data-like-act]");
     if (like) {
@@ -1960,10 +2005,9 @@ function openFlow({ edit = null } = {}) {
         store.set(`convene:resp:${event.id}`, res);
       }
       store.set("convene:name", payload.name);
-      burst();
       close();
-      toast(edit ? "Your response was updated" : "You're in! Thanks for responding");
-      renderEvent(event.id, { keepTab: true });
+      await renderEvent(event.id, { keepTab: true });
+      showBoardingPass({ edited: !!edit });
     } catch (err) {
       st.submitting = false;
       updateChrome();
@@ -1990,6 +2034,95 @@ function openFlow({ edit = null } = {}) {
   });
 
   show(1);
+}
+
+/* ------------------------------------------------------------------ */
+/* Rewards (after Blitz): falling confetti, count-ups, a haptic buzz,  */
+/* all skipped with Reduce Motion / smooth mode.                       */
+/* ------------------------------------------------------------------ */
+const calm = () => reducedMotion() || perf.lite;
+const buzz = (pattern) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* unsupported */
+  }
+};
+
+function confettiFall(n = 70) {
+  if (calm()) return;
+  const colors = ["var(--beacon)", "#1d8bff", "#0a46c9", "#9fd4ff", "#dfe8f2"];
+  const wrap = document.createElement("div");
+  wrap.className = "confetti";
+  wrap.setAttribute("aria-hidden", "true");
+  wrap.innerHTML = Array.from({ length: n }, (_, i) => {
+    const r = (k) => Math.abs((Math.sin((i + 1) * 9301 + k * 49297) * 233280) % 1);
+    return `<i class="${i % 3 ? "" : "round"}" style="--x:${(r(1) * 100).toFixed(1)}vw;--dx:${((r(2) - 0.5) * 30).toFixed(1)}vw;--d:${(r(3) * 0.8).toFixed(2)}s;--t:${(2.4 + r(4) * 1.4).toFixed(2)}s;--s:${(0.6 + r(5) * 0.6).toFixed(2)};--r:${Math.round((r(6) - 0.5) * 1440)}deg;--c:${colors[i % colors.length]}"></i>`;
+  }).join("");
+  document.body.appendChild(wrap);
+  setTimeout(() => wrap.remove(), 4600);
+}
+
+function countUp(el, to, ms = 1100) {
+  if (!el) return;
+  if (calm() || !to) return void (el.textContent = String(to));
+  const t0 = performance.now();
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / ms);
+    el.textContent = String(Math.round(to * (1 - Math.pow(1 - k, 3))));
+    if (k < 1 && el.isConnected) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/** "You're on board": shown after submitting or saving availability. */
+function showBoardingPass({ edited }) {
+  const me = myCurrentResponse();
+  if (!me) return;
+  const { event, responses, agg } = current;
+  const n = agg.n;
+  const today = todayStr();
+  const best = [...agg.days.entries()]
+    .filter(([d]) => d >= today)
+    .map(([d, s]) => ({ d, s, score: scoreOf(s, n) }))
+    .sort((a, b) => b.score - a.score || b.s.yes.length - a.s.yes.length || a.d.localeCompare(b.d))
+    .slice(0, 3);
+  const mine = new Set([...me.r.yes, ...me.r.maybe]);
+  const matches = best.filter((b) => mine.has(b.d)).length;
+  const position = responses.findIndex((r) => r.id === me.r.id) + 1;
+  const first = me.r.name.split(" ")[0];
+  const top = best[0];
+  const headline =
+    top && me.r.yes.includes(top.d)
+      ? `You're free on the group's best date so far, <b>${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</b>.`
+      : matches
+        ? `You match <b>${matches} of the 3</b> best dates so far.`
+        : mine.size
+          ? "Your days are in. Let's see who joins you."
+          : "No days yet — you can add them any time.";
+  const url = `${location.origin}/e/${event.id}`;
+  openSheet(`
+    <div class="boarding">
+      <div class="pass-row"><span class="pass-airline">${icon("plane")} Wingman</span><span class="pass-code">Flight WM-${esc(event.id.slice(0, 4).toUpperCase())}</span></div>
+      <h2 class="boarding-title">${edited ? "Changes saved" : "You're on board"}, ${esc(first)}!</h2>
+      <p class="boarding-sub">${headline}</p>
+      <div class="boarding-stats">
+        <div><b data-count="${mine.size}">0</b><span>days marked</span></div>
+        <div><b data-count="${matches}">0</b><span>of top 3 dates</span></div>
+        <div><b>#<i data-count="${position}">0</i></b><span>to respond</span></div>
+      </div>
+      <div class="pass-perf" aria-hidden="true"></div>
+      <div class="boarding-stub"><span>Passenger</span><b>${esc(me.r.name)}</b><span>Group</span><b>${n} on board</b></div>
+    </div>
+    <div class="stack two boarding-actions">
+      <button class="btn btn-secondary" data-share>${icon("share")} Invite the group</button>
+      <button class="btn btn-primary" data-close>Done</button>
+    </div>`);
+  const wrap = $(".sheet-wrap");
+  $$("[data-count]", wrap).forEach((el, i) => setTimeout(() => countUp(el, Number(el.dataset.count)), 250 + i * 120));
+  $("[data-share]", wrap).addEventListener("click", () => shareLink(url, event.title));
+  if (!edited) confettiFall(top && me.r.yes.includes(top.d) ? 90 : 60);
+  buzz(edited ? 15 : [20, 80, 20]);
 }
 
 function burst() {

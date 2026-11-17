@@ -28,12 +28,14 @@ const TYPES = {
   ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
+  ".woff2": "font/woff2",
 };
 const TEXT = new Set([".html", ".css", ".js", ".mjs", ".json", ".webmanifest", ".svg", ".txt"]);
 
 // Mirrors public/_headers
 function cacheFor(path) {
   if (path === "/app.js" || path === "/styles.css") return "public, max-age=3600, stale-while-revalidate=604800";
+  if (path.startsWith("/fonts/")) return "public, max-age=31536000, immutable";
   if (/\.(png|svg|jpg|jpeg|webp|ico)$/.test(path)) return "public, max-age=86400, stale-while-revalidate=604800";
   if (path.endsWith(".webmanifest")) return "public, max-age=86400";
   return "no-cache";

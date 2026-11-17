@@ -1,0 +1,13 @@
+// PREVIEW deploy: a separate Worker with its OWN database, for trying changes before they go live.
+//   node scripts/build-inline.mjs && npx wrangler deploy -c wrangler.preview.jsonc
+// → https://wingman-preview.euroavia.workers.dev  (production data is never touched)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wingman-preview",
+  "main": "dist/inline-worker.js",
+  "compatibility_date": "2026-10-01",
+  "d1_databases": [
+    { "binding": "DB", "database_name": "wingman-preview-db", "database_id": "93c541a0-e40a-4420-9be1-c45582d25dea", "migrations_dir": "migrations" }
+  ],
+  "observability": { "enabled": true }
+}

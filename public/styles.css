@@ -1187,3 +1187,113 @@ html[data-perf="lite"] .action-bar { background: var(--bg); -webkit-backdrop-fil
 .sheet .big-input { font-size: 1.375rem; margin-bottom: var(--sp-3); }
 /* in-place refresh after a quick vote/like/add: content just updates, nothing re-animates */
 .app.quiet *, .app.quiet *::before, .app.quiet *::after { animation: none !important; }
+
+/* =====================================================================
+   IDENTITY & CALMER MOTION (after Blitz)
+   - Bricolage Grotesque for headlines and numbers; system text for the rest (Apple feel kept)
+   - one warm accent, "beacon orange", reserved for wins and the best result
+   - aviation motifs: boarding-pass header, route line, departure-board dates
+   - springs that settle WITHOUT overshoot; no blur, tilt or pop-in
+   ===================================================================== */
+@font-face { font-family: "Bricolage Grotesque"; src: url(/fonts/bricolage-grotesque.woff2) format("woff2"); font-weight: 500 800; font-style: normal; font-display: swap; }
+:root {
+  --display: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --beacon: #ff6a2b;
+  --beacon-ink: #c2410c;
+  /* Apple-style critically damped spring sampled for CSS (from Blitz): settles, never overshoots */
+  --spring: linear(0, 0.034 1.5%, 0.127 3.4%, 0.416 8.6%, 0.627 13.4%, 0.775 18.4%, 0.875 23.6%, 0.939 29.1%, 0.976 35.1%, 0.995 42.4%, 1.002 53%, 1);
+  --ease: cubic-bezier(.23, 1, .32, 1);
+}
+@media (prefers-color-scheme: dark) { :root { --beacon: #ff7a45; --beacon-ink: #ffb08a; } }
+
+.large-title, .flow-title, .section-title, .sheet h2, .dp-titlebar h2, .tally b, .votes, .summary .big,
+.best-card .date, .verdict-date, .boarding-title, .boarding-stats b, .brand > span:last-child, .board-item .medal, .route b {
+  font-family: var(--display); font-optical-sizing: auto;
+}
+.large-title { font-weight: 800; letter-spacing: -0.035em; }
+.flow-title { font-weight: 800; letter-spacing: -0.035em; }
+.large-title .shine, .flow-title .w.hl { padding-right: .04em; }
+
+/* ---- calmer motion: same timings, no overshoot, no blur/tilt ---- */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes riseBack { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes leave { to { opacity: 0; transform: translateY(-8px); } }
+@keyframes flowIn { from { opacity: 0; transform: translateY(12px); } }
+@keyframes flowOut { to { opacity: 0; transform: translateY(12px); } }
+@keyframes chipIn { from { opacity: 0; transform: translateY(4px); } }
+@keyframes tick { from { opacity: .7; } }
+@keyframes pop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+.flow-title .w { transform: translateY(.22em); filter: none; animation: word .55s var(--ease) forwards; animation-delay: calc(var(--i) * 40ms + 60ms); }
+@keyframes word { to { opacity: 1; transform: none; } }
+.flow-step.enter > * { animation-duration: .5s; animation-timing-function: var(--ease); }
+.day:active, .day.pressing { transform: scale(.96); }
+.chip:active, .like-btn:active { transform: scale(.97); }
+.btn:active { transform: scale(.98); }
+
+/* ---- boarding-pass event header ---- */
+.pass-card { position: relative; }
+.pass-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--label-2); text-shadow: var(--engrave); }
+.pass-airline { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); }
+.pass-airline svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+.pass-code { font-variant-numeric: tabular-nums; }
+.event-head .large-title { margin-top: var(--sp-3); }
+.route { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--sp-3); margin-top: var(--sp-5); }
+.route small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--label-3); }
+.route b { display: block; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+.route span:not(.route-line) { font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.route .r { text-align: right; }
+.route-line { position: relative; height: 2px; margin: 0 var(--sp-2); background: repeating-linear-gradient(90deg, var(--label-3) 0 6px, transparent 6px 12px); }
+.route-line svg { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%) rotate(90deg); fill: var(--accent); stroke: none; filter: drop-shadow(0 0 0 var(--bg)); background: var(--bg); border-radius: 50%; padding: 2px; }
+.pass-perf { height: 0; margin: var(--sp-5) calc(-1 * var(--sp-1)) 0; border-top: 2px dashed var(--separator); }
+
+/* ---- verdict: the group's best date so far ---- */
+.verdict { padding: var(--sp-5); margin-bottom: var(--sp-5); position: relative; overflow: hidden; }
+.verdict::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--beacon); }
+.verdict-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--beacon-ink); }
+.verdict-label svg { width: 15px; height: 15px; fill: currentColor; stroke: none; }
+.verdict-date { font-size: clamp(1.6rem, 6vw, 2.1rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin: var(--sp-2) 0 var(--sp-1); }
+.verdict-sub { color: var(--label-2); font-size: .9375rem; }
+.verdict-sub b { color: var(--label); font-variant-numeric: tabular-nums; }
+.verdict-meter { height: 8px; border-radius: 999px; margin: var(--sp-3) 0 var(--sp-4); background: linear-gradient(180deg, var(--well-a), var(--well-b)); box-shadow: var(--sh-channel); overflow: hidden; }
+.verdict-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffa36e, var(--beacon)); transform-origin: left; animation: grow .9s var(--ease) both; }
+
+/* ---- departure-board dates ---- */
+.best-card .date.flap { display: flex; gap: 3px; margin: 6px 0 4px; }
+.flap span {
+  display: inline-block; padding: 3px 5px; border-radius: 4px; font-size: .9375rem; font-weight: 700; letter-spacing: .02em;
+  color: #f2f7ff; background: linear-gradient(180deg, #1b2a44 0 49%, #142036 51% 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1px 1px rgba(0,0,0,.25);
+}
+.best-card .rank { color: var(--label-2); }
+
+/* ---- after submitting: the boarding pass ---- */
+.boarding { padding: var(--sp-2) 0 var(--sp-4); }
+.boarding-title { font-size: clamp(1.7rem, 6vw, 2.2rem); font-weight: 800; letter-spacing: -0.035em; line-height: 1.08; margin: var(--sp-4) 0 var(--sp-2); }
+.boarding-sub { color: var(--label-2); margin: 0 0 var(--sp-5); line-height: 1.45; }
+.boarding-sub b { color: var(--label); }
+.boarding-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); }
+.boarding-stats div { text-align: center; padding: var(--sp-3) var(--sp-2); border-radius: var(--r-md); background: linear-gradient(180deg, var(--well-a), var(--well-b)); box-shadow: var(--sh-well); }
+.boarding-stats b { display: block; font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--label); }
+.boarding-stats b i { font-style: normal; }
+.boarding-stats div:first-child b { color: var(--beacon-ink); }
+.boarding-stats span { font-size: 12px; font-weight: 600; color: var(--label-2); }
+.boarding-stub { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--sp-4); margin-top: var(--sp-4); font-size: .9375rem; }
+.boarding-stub span { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--label-3); align-self: center; }
+.boarding-actions { margin-top: var(--sp-2); }
+
+/* ---- confetti (falls, never bounces) ---- */
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 95; }
+.confetti i { position: absolute; top: -24px; left: var(--x); width: 9px; height: 14px; border-radius: 2px; background: var(--c);
+  transform: scale(var(--s)); opacity: 0; animation: fall var(--t) cubic-bezier(.25, .6, .4, 1) var(--d) both; }
+.confetti i.round { width: 10px; height: 10px; border-radius: 50%; }
+@keyframes fall { 0% { opacity: 1; transform: translate(0, 0) rotate(0) scale(var(--s)); } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), 108vh) rotate(var(--r)) scale(var(--s)); } }
+
+/* ---- quick-vote reward: the count lifts once ---- */
+.votes.bump { animation: bump .45s var(--ease); }
+@keyframes bump { 40% { transform: translateY(-3px); color: var(--beacon-ink); } }
+.board-item:nth-child(1) .medal { box-shadow: inset 0 -1px 1px rgba(0,0,0,.25), inset 0 1px 0 var(--ano-hl), 0 0 0 2px var(--beacon), 0 1px 2px rgba(0,0,0,.18), 0 3px 6px rgba(0,0,0,.12); }
+
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } .votes.bump, .verdict-meter i { animation: none; } }
+/* sheets are solid brushed metal (like the date picker): big text behind them never shows through */
+.sheet { background: linear-gradient(180deg, var(--alu-a), var(--alu-b)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.boarding .pass-row { margin-bottom: var(--sp-2); }
