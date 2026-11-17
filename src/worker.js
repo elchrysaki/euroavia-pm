@@ -137,13 +137,59 @@ async function readBody(request) {
   }
 }
 
-async function getEvent(env, id) {
+/* Retention: an event is deleted one month after its last selectable date, or after two months
+   in which nobody opened it (every visit resets that clock). A daily cron also sweeps. */
+const DAY = 86_400_000;
+const AFTER_END_MS = 30 * DAY;
+const IDLE_MS = 60 * DAY;
+const TOUCH_EVERY_MS = 60 * 60 * 1000; // write last_seen at most hourly per event
+
+function deleteAt(event) {
+  const endOfLastDay = Date.parse(`${event.end_date}T23:59:59Z`);
+  const lastSeen = event.last_seen || event.created_at;
+  return Math.min(endOfLastDay + AFTER_END_MS, lastSeen + IDLE_MS);
+}
+
+async function deleteEvent(env, id) {
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM responses WHERE event_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id),
+  ]);
+}
+
+/** Loads an event; deletes it if it has expired; records this visit (keeps it alive). */
+async function getEvent(env, id, { touch = true } = {}) {
   const row = await env.DB.prepare(
-    "SELECT id, title, description, year, start_date, end_date, created_at FROM events WHERE id = ?",
+    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen FROM events WHERE id = ?",
   )
     .bind(id)
     .first();
-  return withRange(row);
+  const event = withRange(row);
+  if (!event) return null;
+  const now = Date.now();
+  if (now >= deleteAt(event)) {
+    await deleteEvent(env, id);
+    return null;
+  }
+  if (touch && now - (event.last_seen || 0) > TOUCH_EVERY_MS) {
+    await env.DB.prepare("UPDATE events SET last_seen = ? WHERE id = ?").bind(now, id).run();
+    event.last_seen = now;
+  }
+  event.delete_at = deleteAt(event);
+  delete event.last_seen;
+  return event;
+}
+
+/** Daily sweep for events nobody opens any more. */
+async function sweepExpired(env) {
+  const now = Date.now();
+  const lastDayCutoff = new Date(now - AFTER_END_MS).toISOString().slice(0, 10); // end_date before this = past +30d
+  const idleCutoff = now - IDLE_MS;
+  const expired = "SELECT id FROM events WHERE COALESCE(end_date, year || '-12-31') < ?1 OR COALESCE(last_seen, created_at) < ?2";
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM responses WHERE event_id IN (${expired})`).bind(lastDayCutoff, idleCutoff),
+    env.DB.prepare(`DELETE FROM events WHERE id IN (${expired})`).bind(lastDayCutoff, idleCutoff),
+  ]);
 }
 
 async function handleApi(request, env, url) {
@@ -168,9 +214,9 @@ async function handleApi(request, env, url) {
 
     const id = randomId(10);
     await env.DB.prepare(
-      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now())
+      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now(), Date.now())
       .run();
     return json({ id }, 201);
   }
@@ -183,7 +229,7 @@ async function handleApi(request, env, url) {
   // GET /api/events/:id
   if (parts.length === 2 && method === "GET") {
     const event = await getEvent(env, eventId);
-    if (!event) return fail("This event doesn't exist.", 404);
+    if (!event) return fail("This event doesn't exist or has been removed.", 404);
     const { results } = await env.DB.prepare(
       "SELECT id, name, data, created_at, updated_at FROM responses WHERE event_id = ? ORDER BY created_at ASC",
     )
@@ -202,7 +248,7 @@ async function handleApi(request, env, url) {
   // POST /api/events/:id/responses
   if (parts.length === 3 && parts[2] === "responses" && method === "POST") {
     const event = await getEvent(env, eventId);
-    if (!event) return fail("This event doesn't exist.", 404);
+    if (!event) return fail("This event doesn't exist or has been removed.", 404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM responses WHERE event_id = ?").bind(eventId).first("n");
     if (count >= LIMITS.responsesPerEvent) return fail("This event is full.", 409);
 
@@ -225,7 +271,7 @@ async function handleApi(request, env, url) {
   // PUT /api/events/:id/responses/:rid  — edit your own response (token kept on your device)
   if (parts.length === 4 && parts[2] === "responses" && method === "PUT") {
     const event = await getEvent(env, eventId);
-    if (!event) return fail("This event doesn't exist.", 404);
+    if (!event) return fail("This event doesn't exist or has been removed.", 404);
     const body = await readBody(request);
     if (!body || typeof body.token !== "string") return fail("Invalid request.");
     const existing = await env.DB.prepare("SELECT token FROM responses WHERE id = ? AND event_id = ?")
@@ -250,7 +296,7 @@ let schemaReady = null;
 function ensureSchema(env) {
   schemaReady ??= env.DB.batch([
     env.DB.prepare(
-      "CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', year INTEGER NOT NULL, start_date TEXT, end_date TEXT, created_at INTEGER NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', year INTEGER NOT NULL, start_date TEXT, end_date TEXT, created_at INTEGER NOT NULL, last_seen INTEGER)",
     ),
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS responses (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id), name TEXT NOT NULL, token TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
@@ -258,9 +304,9 @@ function ensureSchema(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_responses_event ON responses(event_id, created_at)"),
   ])
     .then(async () => {
-      // databases created before date ranges existed: add the columns (fails harmlessly if present)
-      for (const col of ["start_date", "end_date"]) {
-        await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} TEXT`).run().catch(() => {});
+      // databases created by older versions: add the newer columns (fails harmlessly if present)
+      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"]]) {
+        await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} ${type}`).run().catch(() => {});
       }
     })
     .catch((err) => {
@@ -271,6 +317,10 @@ function ensureSchema(env) {
 }
 
 export default {
+  async scheduled(controller, env, ctx) {
+    await ensureSchema(env);
+    ctx.waitUntil(sweepExpired(env));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {

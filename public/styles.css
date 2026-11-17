@@ -1142,3 +1142,48 @@ html[data-perf="lite"] .action-bar { background: var(--bg); -webkit-backdrop-fil
    push-back animation is what made opening slow on mid-range phones. */
 .flow.pushed .flow-bottom { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg); }
 .flow.pushed { will-change: transform; }
+
+/* =====================================================================
+   Names, LettuceMeet-style heat scale, quick votes, expiry notice
+   ===================================================================== */
+:root { --heat-lo: #e9f3ff; --heat-hi: #0a46c9; }
+@media (prefers-color-scheme: dark) { :root { --heat-lo: #1c2d47; --heat-hi: #4aa8ff; } }
+
+/* one clearly different shade per number of people: very pale for one, deep for everyone */
+.day.heat, .day.past.heat, .legend-scale i {
+  background: rgba(var(--heat-rgb), calc(0.12 + 0.88 * var(--t, 0))); /* fallback for older browsers */
+  background: color-mix(in oklab, var(--heat-hi) calc(var(--t, 0) * 100%), var(--heat-lo));
+}
+.day.heat { color: var(--label); }
+.day.heat.strong { color: #fff; }
+.legend-scale i { box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, 0.08); }
+.legend { font-variant-numeric: tabular-nums; }
+
+/* who responded — full names */
+.people-list { margin-top: var(--sp-4); }
+.people-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--label-2); margin: 0 0 var(--sp-2) 2px; text-shadow: var(--engrave); }
+.people-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.person {
+  display: inline-flex; align-items: center; gap: var(--sp-2); padding: 3px 12px 3px 3px; border-radius: 999px;
+  font-size: .9375rem; font-weight: 600; max-width: 100%;
+  background: linear-gradient(180deg, var(--key-a), var(--key-c)); box-shadow: var(--sh-key-sm);
+}
+.person > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person .avatar.sm { box-shadow: none; }
+
+/* quick add + vote */
+.quick-add { margin: 0 0 var(--sp-4); }
+.quick-act { margin-bottom: var(--sp-5); }
+.vote-col { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); }
+.vote-btn { min-height: 34px; font-size: 13px; padding: 6px 12px; }
+.board-item { grid-template-columns: 40px minmax(0, 1fr) auto; }
+
+.expiry-note {
+  display: flex; align-items: flex-start; gap: var(--sp-2); margin: var(--sp-4) 0 0; padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md); font-size: .875rem; line-height: 1.4; color: var(--label-2);
+  background: linear-gradient(180deg, var(--well-a), var(--well-b)); box-shadow: var(--sh-well);
+}
+.expiry-note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--accent); }
+.sheet .big-input { font-size: 1.375rem; margin-bottom: var(--sp-3); }
+/* in-place refresh after a quick vote/like/add: content just updates, nothing re-animates */
+.app.quiet *, .app.quiet *::before, .app.quiet *::after { animation: none !important; }

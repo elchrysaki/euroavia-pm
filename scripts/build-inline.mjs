@@ -88,6 +88,9 @@ export default {
   fetch(request, env, ctx) {
     return app.fetch(request, { ...env, ASSETS }, ctx);
   },
+  scheduled(controller, env, ctx) {
+    return app.scheduled(controller, env, ctx);
+  },
 };
 `;
 mkdirSync(join(ROOT, "dist"), { recursive: true });

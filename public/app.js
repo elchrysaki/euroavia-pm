@@ -807,9 +807,9 @@ document.addEventListener("click", (e) => {
     navigate(a.pathname);
   }
 });
-window.addEventListener("popstate", route);
+window.addEventListener("popstate", () => route()); // looked up at call time: route is wrapped for update checks
 
-function route() {
+let route = function route() {
   closeSheet(true);
   $(".flow")?.remove();
   $(".dp-wrap")?.remove();
@@ -1040,7 +1040,7 @@ function cacheEvent(id, data) {
  * Shows the last saved copy of an event immediately (if any), then refreshes from the network and
  * repaints only when something changed. On a slow connection the page is usable at once.
  */
-async function renderEvent(id, { keepTab = false } = {}) {
+async function renderEvent(id, { keepTab = false, quiet = false } = {}) {
   const prevTab = keepTab && current ? current.tab : "calendar";
   const cached = keepTab ? null : store.get(`convene:cache:${id}`);
   if (cached) paintEvent(cached, prevTab);
@@ -1064,11 +1064,12 @@ async function renderEvent(id, { keepTab = false } = {}) {
     Object.assign(current, data, { agg: aggregate(data.responses) });
     return;
   }
-  paintEvent(data, current && cached ? current.tab : prevTab);
+  paintEvent(data, current && cached ? current.tab : prevTab, { quiet });
 }
 
-function paintEvent(data, prevTab) {
+function paintEvent(data, prevTab, { quiet = false } = {}) {
   current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set() };
+  app.classList.toggle("quiet", quiet); // in-place update (a vote, a like): no entrance animations
   const { event, responses } = data;
   document.title = `${event.title} — Wingman`;
 
@@ -1100,7 +1101,14 @@ function paintEvent(data, prevTab) {
             <span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>
             <span class="pill">${icon("lock")} Locked</span>
           </div>
-          ${responses.length ? `<div class="people-row">${responses.map((r) => avatar(r.name)).join("")}</div>` : ""}
+          ${
+            responses.length
+              ? `<div class="people-list"><div class="people-label">Who responded</div><div class="people-chips">${responses
+                  .map((r) => `<span class="person">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></span>`)
+                  .join("")}</div></div>`
+              : ""
+          }
+          ${expiryNotice(event)}
         </div>
         <div class="event-cta fade-in d1">${ctaHtml}</div>
       </aside>
@@ -1126,6 +1134,7 @@ function paintEvent(data, prevTab) {
     renderTab();
   });
   bindCalendar();
+  bindQuickActions();
   $("#selClear").onclick = exitSelectMode;
   $("#selShow").onclick = () => current.selected.size && openDaySheet([...current.selected].sort());
   renderTab();
@@ -1154,7 +1163,13 @@ function calendarHtml() {
     .sort((a, b) => b.score - a.score || b.s.yes.length - a.s.yes.length || a.d.localeCompare(b.d))
     .slice(0, 6);
 
-  const legend = [0.12, 0.3, 0.5, 0.72, 1].map((a) => `<i style="--a:${a}"></i>`).join("");
+  // LettuceMeet-style scale: one clearly different shade per number of people, pale -> deep
+  const steps = n <= 6 ? n : 5;
+  const legend = Array.from({ length: steps + 1 }, (_, k) => {
+    const t = k / steps;
+    const people = Math.round(t * n);
+    return `<i style="--t:${t.toFixed(3)}" title="${people} of ${n}"></i>`;
+  }).join("");
 
   if (!n) {
     return `<div class="card empty"><div class="glyph">${icon("calendar")}</div><h3>No one has responded yet</h3><p>Be the first — add your availability, then share the link with the group.</p></div>
@@ -1174,18 +1189,17 @@ function calendarHtml() {
         : ""
     }
     <div class="cal-toolbar">
-      <div class="legend"><span>Fewer</span><span class="legend-scale">${legend}</span><span>More people</span></div>
+      <div class="legend"><span>0/${n}</span><span class="legend-scale">${legend}</span><span>${n}/${n} available</span></div>
       <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} Select dates</button>
     </div>
     ${monthsHtml(eventRange(event), (date) => {
       const s = days.get(date);
       if (!s) return {};
-      const score = scoreOf(s, n);
-      const a = (0.12 + 0.88 * score).toFixed(3);
+      const score = scoreOf(s, n); // yes = 1, maybe = 0.5, divided by everyone who responded
       return {
-        cls: `heat${a > 0.55 ? " strong" : ""}${score === maxScore && score > 0 ? " max" : ""}`,
-        style: `--a:${a}`,
-        label: `${s.yes.length} yes, ${s.maybe.length} maybe`,
+        cls: `heat${score > 0.55 ? " strong" : ""}${score === maxScore && score > 0 ? " max" : ""}`,
+        style: `--t:${score.toFixed(3)}`,
+        label: `${s.yes.length} yes, ${s.maybe.length} maybe of ${n}`,
       };
     })}
   `;
@@ -1280,18 +1294,32 @@ function openDaySheet(dates) {
   `);
 }
 
+/** The response saved from this device for the current event, if any. */
+function myCurrentResponse() {
+  const mine = store.get(`convene:resp:${current.event.id}`);
+  const r = mine && current.responses.find((x) => x.id === mine.id);
+  return r ? { mine, r } : null;
+}
+
 function destinationsHtml() {
   const { destinations, n } = current.agg;
+  const me = myCurrentResponse();
+  const myPlaces = new Set((me?.r.destinations || []).map((d) => d.toLowerCase()));
+  const addForm = `<form class="add-row quick-add" data-form="place"><input name="place" maxlength="60" placeholder="Suggest a place…" enterkeyhint="send" aria-label="Suggest a place" /><button class="btn btn-secondary" type="submit">${icon("plus")} Add</button></form>`;
   if (!destinations.length)
-    return `<div class="card empty"><div class="glyph">${icon("pin")}</div><h3>No destinations yet</h3><p>Suggest a place when you add your availability.</p></div>`;
+    return `${addForm}<div class="card empty"><div class="glyph">${icon("pin")}</div><h3>No places yet</h3><p>Suggest the first one above.</p></div>`;
   const top = destinations[0].voters.length;
-  return `<div class="board">${destinations
+  return `${addForm}<div class="board">${destinations
     .map((d, i) => {
       const acts = current.agg.activities.filter((a) => a.destination && a.destination.toLowerCase() === d.name.toLowerCase()).length;
+      const voted = myPlaces.has(d.name.toLowerCase());
       return `<div class="card board-item" style="animation:rise .6s var(--ease) both;animation-delay:${i * 60}ms">
         <div class="medal">${i + 1}</div>
         <div><h4>${esc(d.name)}</h4><div class="sub">${esc(d.voters.join(", "))}${acts ? ` · ${acts} ${acts === 1 ? "activity" : "activities"}` : ""}</div></div>
-        <div class="votes">${d.voters.length}<small>${d.voters.length === 1 ? "vote" : "votes"}</small></div>
+        <div class="vote-col">
+          <div class="votes">${d.voters.length}<small>${d.voters.length === 1 ? "vote" : "votes"}</small></div>
+          <button type="button" class="like-btn vote-btn" data-vote="${esc(d.name)}" aria-pressed="${voted}">${icon(voted ? "check" : "plus")} ${voted ? "Voted" : "Vote"}</button>
+        </div>
         <div class="bar"><i style="width:${Math.max(6, (d.voters.length / Math.max(top, n || 1)) * 100)}%;animation-delay:${i * 60 + 150}ms"></i></div>
       </div>`;
     })
@@ -1319,6 +1347,25 @@ function activityRow(a, { likeable = false, liked = false } = {}) {
   </div>`;
 }
 
+/** Activity row on the event page: like other people's ideas, remove your own. */
+function eventActivityRow(a, me) {
+  const own = me && a.byId === me.r.id;
+  const liked = !!me && (me.r.likes || []).includes(a.id);
+  const control = own
+    ? `<button type="button" class="remove" data-remove-act="${esc(a.id)}" aria-label="Remove ${esc(a.title)}">${icon("x")}</button>`
+    : `<button type="button" class="like-btn" data-like-act="${esc(a.id)}" aria-pressed="${liked}">${icon("thumb")} ${a.likes.length || ""}</button>`;
+  return `<div class="activity">
+    ${avatar(a.by, "sm")}
+    <div class="body">
+      <div class="title">${esc(a.title)}</div>
+      <div class="meta"><span>by ${esc(a.by)}</span>${
+        a.link ? `<a class="linkchip" href="${esc(a.link)}" target="_blank" rel="noopener noreferrer nofollow">${icon("arrow")}${esc(domainOf(a.link))}</a>` : ""
+      }${a.likes.length ? `<span>· liked by ${esc(a.likes.join(", "))}</span>` : ""}</div>
+    </div>
+    ${control}
+  </div>`;
+}
+
 function groupActivities(activities, destinationOrder) {
   const groups = new Map();
   for (const a of activities) {
@@ -1340,27 +1387,178 @@ function groupActivities(activities, destinationOrder) {
 
 function activitiesHtml() {
   const { activities, destinations } = current.agg;
+  const me = myCurrentResponse();
+  const form = `<form class="card pad quick-act" data-form="activity">
+      <div class="form-grid">
+        <input class="field full" name="title" maxlength="100" placeholder="Add an activity — e.g. Sunset kayak tour" aria-label="Activity" />
+        <input class="field" name="link" maxlength="500" inputmode="url" placeholder="Paste a link (optional)" aria-label="Link" />
+        <select class="field" name="destination" aria-label="Destination">
+          <option value="">General — anywhere</option>
+          ${destinations.map((d) => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join("")}
+        </select>
+        <button class="btn btn-primary full" type="submit">${icon("plus")} Add activity</button>
+      </div>
+    </form>`;
   if (!activities.length)
-    return `<div class="card empty"><div class="glyph">${icon("sparkles")}</div><h3>No activities yet</h3><p>Add ideas — with links — when you add your availability.</p></div>`;
-  return groupActivities(
-    activities,
-    destinations.map((d) => d.name),
-  )
-    .map(
-      (g) => `<div class="activity-group"><h3>${icon(g.name === "General" ? "sparkles" : "pin").replace("<svg", '<svg width="16" height="16"')} ${esc(g.name)}</h3>
-      <div class="card group">${g.items.map((a) => activityRow(a)).join("")}</div></div>`,
+    return `${form}<div class="card empty"><div class="glyph">${icon("sparkles")}</div><h3>No activities yet</h3><p>Add the first idea above — links welcome.</p></div>`;
+  return (
+    form +
+    groupActivities(
+      activities,
+      destinations.map((d) => d.name),
     )
-    .join("");
+      .map(
+        (g) => `<div class="activity-group"><h3>${icon(g.name === "General" ? "sparkles" : "pin").replace("<svg", '<svg width="16" height="16"')} ${esc(g.name)}</h3>
+      <div class="card group">${g.items.map((a) => eventActivityRow(a, me)).join("")}</div></div>`,
+      )
+      .join("")
+  );
+}
+
+/** Asks for a name in a small sheet (first quick vote from this device). Resolves null if dismissed. */
+function askName() {
+  return new Promise((resolve) => {
+    openSheet(
+      `<div class="sheet-head"><div><h2>What's your name?</h2><div class="sheet-sub">So the group knows who voted. No account needed.</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+       <form class="stack" data-form="name"><input class="big-input" name="name" maxlength="40" placeholder="Your name" autocomplete="given-name" value="${esc(store.get("convene:name", ""))}" />
+       <button class="btn btn-primary btn-block" type="submit">Continue</button></form>`,
+      { onClose: () => resolve(null) },
+    );
+    const wrap = $(".sheet-wrap");
+    const input = $('input[name="name"]', wrap);
+    setTimeout(() => input.focus(), 300);
+    $('[data-form="name"]', wrap).addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = input.value.trim().replace(/\s+/g, " ");
+      if (!name) return input.focus();
+      wrap.__onClose = null;
+      closeSheet();
+      resolve(name);
+    });
+  });
+}
+
+/**
+ * Changes your saved response in place (vote, like, add) without going through the whole flow.
+ * Uses your existing response from this device, or creates one with just a name.
+ */
+let quickBusy = false;
+async function quickSave(mutate) {
+  if (quickBusy) return;
+  quickBusy = true;
+  try {
+    const { event } = current;
+    const me = myCurrentResponse();
+    let draft = me
+      ? { name: me.r.name, yes: [...me.r.yes], maybe: [...me.r.maybe], destinations: [...me.r.destinations], activities: me.r.activities.map((a) => ({ ...a })), likes: [...(me.r.likes || [])] }
+      : null;
+    if (!draft) {
+      const name = await askName();
+      if (!name) return;
+      draft = { name, yes: [], maybe: [], destinations: [], activities: [], likes: [] };
+    }
+    if (mutate(draft) === false) return;
+    const y = window.scrollY;
+    if (me) await api(`/events/${event.id}/responses/${me.mine.id}`, { method: "PUT", body: { ...draft, token: me.mine.token } });
+    else {
+      const res = await api(`/events/${event.id}/responses`, { method: "POST", body: draft });
+      store.set(`convene:resp:${event.id}`, res);
+      store.set("convene:name", draft.name);
+    }
+    await renderEvent(event.id, { keepTab: true, quiet: true });
+    window.scrollTo(0, y);
+  } catch (err) {
+    toast(err.message, { error: true });
+  } finally {
+    quickBusy = false;
+  }
+}
+
+const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+
+function bindQuickActions() {
+  const body = $("#tabBody");
+  body.addEventListener("click", (e) => {
+    const vote = e.target.closest("[data-vote]");
+    if (vote) {
+      const name = vote.dataset.vote;
+      vote.setAttribute("aria-pressed", String(vote.getAttribute("aria-pressed") !== "true")); // instant feedback
+      return quickSave((d) => {
+        const i = d.destinations.findIndex((x) => x.toLowerCase() === name.toLowerCase());
+        if (i >= 0) d.destinations.splice(i, 1);
+        else if (d.destinations.length >= 10) return void toast("Up to 10 places per person", { error: true }) ?? false;
+        else d.destinations.push(name);
+      });
+    }
+    const like = e.target.closest("[data-like-act]");
+    if (like) {
+      const id = like.dataset.likeAct;
+      like.setAttribute("aria-pressed", String(like.getAttribute("aria-pressed") !== "true"));
+      return quickSave((d) => {
+        d.likes = d.likes.includes(id) ? d.likes.filter((x) => x !== id) : [...d.likes, id];
+      });
+    }
+    const rm = e.target.closest("[data-remove-act]");
+    if (rm) {
+      const id = rm.dataset.removeAct;
+      return quickSave((d) => {
+        d.activities = d.activities.filter((a) => a.id !== id);
+      });
+    }
+  });
+  body.addEventListener("submit", (e) => {
+    const form = e.target.closest("[data-form]");
+    if (!form) return;
+    e.preventDefault();
+    if (form.dataset.form === "place") {
+      const v = form.place.value.trim().replace(/\s+/g, " ").slice(0, 60);
+      if (!v) return form.place.focus();
+      const existing = current.agg.destinations.find((d) => d.name.toLowerCase() === v.toLowerCase());
+      return quickSave((d) => {
+        if (d.destinations.some((x) => x.toLowerCase() === v.toLowerCase())) return void toast("You already voted for that place") ?? false;
+        if (d.destinations.length >= 10) return void toast("Up to 10 places per person", { error: true }) ?? false;
+        d.destinations.push(existing ? existing.name : v);
+      });
+    }
+    if (form.dataset.form === "activity") {
+      const title = form.title.value.trim();
+      if (!title) return form.title.focus();
+      let link = form.link.value.trim();
+      if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
+      if (link) {
+        try {
+          new URL(link);
+        } catch {
+          return toast("That link doesn't look right", { error: true });
+        }
+      }
+      const destination = form.destination.value;
+      return quickSave((d) => {
+        if (d.activities.length >= 15) return void toast("Up to 15 activities per person", { error: true }) ?? false;
+        d.activities.push({ id: newId(), title, link, destination });
+      });
+    }
+  });
+}
+
+/** Shown in the event's last 7 days. */
+function expiryNotice(event) {
+  if (!event.delete_at) return "";
+  const days = Math.ceil((event.delete_at - Date.now()) / 86_400_000);
+  if (days > 7) return "";
+  const when = new Date(event.delete_at).toLocaleDateString(undefined, { month: "long", day: "numeric" });
+  return `<p class="expiry-note">${icon("lock")}<span>This event will be deleted on <b>${esc(when)}</b>${days <= 1 ? " (tomorrow)" : ""}, one month after its last date.</span></p>`;
 }
 
 /* ------------------------------------------------------------------ */
 /* Sheet                                                               */
 /* ------------------------------------------------------------------ */
 
-function openSheet(html) {
+function openSheet(html, { onClose } = {}) {
   closeSheet(true);
   const wrap = document.createElement("div");
   wrap.className = "sheet-wrap";
+  wrap.__onClose = onClose || null;
   wrap.innerHTML = `<div class="sheet-scrim" data-close></div><div class="sheet" role="dialog" aria-modal="true"><div class="grabber"></div>${html}</div>`;
   document.body.appendChild(wrap);
   document.body.style.overflow = "hidden";
@@ -1394,6 +1592,9 @@ function openSheet(html) {
 function closeSheet(immediate = false) {
   const wrap = $(".sheet-wrap");
   if (!wrap) return;
+  const cb = wrap.__onClose;
+  wrap.__onClose = null;
+  cb?.();
   if (!$(".flow")) document.body.style.overflow = "";
   if (immediate) return wrap.remove();
   wrap.classList.remove("open");
@@ -1807,3 +2008,53 @@ function burst() {
 
 route();
 requestAnimationFrame(measureDevice);
+
+/* ------------------------------------------------------------------ */
+/* Always the newest version (same approach as Blitz):                 */
+/* - a service worker serves the app network-first (instant fallback   */
+/*   to the saved copy if slow/offline);                               */
+/* - a tab left open checks every 30 min (and when you come back to    */
+/*   it) whether a newer version is live, then reloads at the next     */
+/*   page change, or right away when you return to the tab and nothing */
+/*   is half-filled in.                                                */
+/* ------------------------------------------------------------------ */
+const loadedAt = Date.now();
+const myVersion = (document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1];
+let updateReady = false;
+let lastCheck = 0;
+const busy = () => !!($(".flow") || $(".sheet-wrap") || $(".dp-wrap") || quickBusy);
+
+async function checkForUpdate() {
+  if (updateReady || Date.now() - lastCheck < 5 * 60 * 1000) return;
+  lastCheck = Date.now();
+  try {
+    const html = await (await fetch("/", { cache: "no-cache" })).text();
+    const live = (html.match(/app\.js\?v=(\d+)/) || [])[1];
+    if (live && myVersion && live !== myVersion) updateReady = true;
+  } catch {
+    /* offline: try again later */
+  }
+}
+const _route = route;
+route = function () {
+  if (updateReady && !busy()) return location.reload(); // new version: load it on the next page change
+  return _route();
+};
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  await checkForUpdate();
+  if (updateReady && !busy()) location.reload();
+});
+setInterval(() => document.visibilityState === "visible" && checkForUpdate(), 30 * 60 * 1000);
+
+if ("serviceWorker" in navigator && !/[?&]nosw\b/.test(location.search)) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // a new version took over right as the page opened: show it (once)
+    if (hadController && Date.now() - loadedAt < 4000 && !sessionStorage.getItem("wm-sw-reloaded")) {
+      sessionStorage.setItem("wm-sw-reloaded", "1");
+      location.reload();
+    }
+  });
+}

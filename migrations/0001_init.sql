@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS events (
   year        INTEGER NOT NULL,
   start_date  TEXT,
   end_date    TEXT,
-  created_at  INTEGER NOT NULL
+  created_at  INTEGER NOT NULL,
+  last_seen   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS responses (

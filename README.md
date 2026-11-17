@@ -67,6 +67,18 @@ The look is cool steel adapted to the light theme:
 
 All shadow stacks are CSS variables at the end of `public/styles.css`. Smooth mode swaps in lighter stacks.
 
+## How long events are kept
+
+- An event is deleted **one month after its last selectable date**.
+- An event **nobody opens for two months** is also deleted, even if its dates haven't ended. Every visit restarts that clock.
+- In the last 7 days before deletion, the event page shows when it will be deleted.
+- Deletion happens when someone opens an expired event, and in a daily sweep (Cron Trigger, 03:17 UTC). Responses are deleted with their event.
+
+## Always up to date (same approach as Blitz)
+
+- **Service worker** (`public/sw.js`): the page, script and styles come from the network first, so every visit gets the newest version. The saved copy is used if the network takes over 2.5 s or is offline. Event data (`/api`) is never cached.
+- **Open tabs** check every 30 minutes, and whenever you return to the tab, whether a newer version is live. If so, they reload at the next page change, or straight away on return, unless a form or sheet is open.
+
 ## Stack
 
 - **Cloudflare Worker** (`src/worker.js`): a small JSON API under `/api/*`

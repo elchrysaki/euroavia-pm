@@ -9,6 +9,9 @@
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
 
+/sw.js
+  Cache-Control: no-cache
+
 # Pages (the SPA shell) always revalidate so a deploy shows up immediately.
 /
   Cache-Control: no-cache
