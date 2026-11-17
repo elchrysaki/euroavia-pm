@@ -186,9 +186,15 @@ function toast(message, { error = false } = {}) {
 }
 
 async function api(path, options = {}) {
+  const headers = {};
+  if (options.body) headers["content-type"] = "application/json";
+  // creator of this trip / meeting? send the admin key kept in this browser (lets the server show host tools)
+  const own = path.match(/^\/(events|meetings)\/([A-Za-z0-9]{6,16})/);
+  const admin = own && store.get(`wingman:admin:${own[2]}`);
+  if (admin) headers["x-wingman-admin"] = admin;
   const res = await fetch(`/api${path}`, {
     method: options.method || "GET",
-    headers: options.body ? { "content-type": "application/json" } : undefined,
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   let data = {};
@@ -444,11 +450,47 @@ function attachPainter(root, st, onChange) {
     }
     onChange();
   };
+  // Like the meeting times grid: dragging marks every day inside the rectangle between the day you
+  // pressed and the day under your finger (diagonals fill the days in between). Days that leave the
+  // rectangle while you're still dragging go back to how they were.
+  let snap = null;
+  let origin = null;
+  let cells = [];
   const begin = (cell) => {
     const d = cell.dataset.date;
     action = st.mode !== "erase" && st[st.mode].has(d) ? "erase" : st.mode; // tapping a marked day toggles it off
     last = cell;
+    origin = cell;
+    snap = { yes: new Set(st.yes), maybe: new Set(st.maybe) };
+    cells = $$(".day[data-date]:not([disabled])", root);
     setCell(cell);
+  };
+  const centre = (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
+  const paintRect = (to) => {
+    if (!origin || !snap) return setCell(to);
+    const a = centre(origin);
+    const b = centre(to);
+    const x0 = Math.min(a.x, b.x) - 2;
+    const x1 = Math.max(a.x, b.x) + 2;
+    const y0 = Math.min(a.y, b.y) - 2;
+    const y1 = Math.max(a.y, b.y) + 2;
+    for (const el of cells) {
+      const c = centre(el);
+      const d = el.dataset.date;
+      const inside = c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1;
+      const want = inside ? (action === "erase" ? null : action) : snap.yes.has(d) ? "yes" : snap.maybe.has(d) ? "maybe" : null;
+      st.yes.delete(d);
+      st.maybe.delete(d);
+      el.classList.remove("yes", "maybe");
+      if (want) {
+        st[want].add(d);
+        el.classList.add(want);
+      }
+    }
+    onChange();
   };
   const cellAt = (x, y) => {
     const el = document.elementFromPoint(x, y);
@@ -489,7 +531,7 @@ function attachPainter(root, st, onChange) {
     const c = cellAt(e.clientX, e.clientY);
     if (c && c !== last) {
       last = c;
-      setCell(c);
+      paintRect(c);
     }
   });
   const end = (e) => {
@@ -499,6 +541,8 @@ function attachPainter(root, st, onChange) {
     unpress();
     painting = false;
     start = null;
+    origin = null;
+    snap = null;
   };
   root.addEventListener("pointerup", end);
   root.addEventListener("pointercancel", (e) => {
@@ -514,7 +558,7 @@ function attachPainter(root, st, onChange) {
       const c = t && cellAt(t.clientX, t.clientY);
       if (c && c !== last) {
         last = c;
-        setCell(c);
+        paintRect(c);
       }
     },
     { passive: false },
@@ -538,25 +582,6 @@ function attachPainter(root, st, onChange) {
   });
   return { get painting() { return painting; } };
 }
-
-/** Groups consecutive days with the same state into runs, e.g. Nov 20–22. */
-function dayRuns(st) {
-  const all = [...st.yes].map((d) => [d, "yes"]).concat([...st.maybe].map((d) => [d, "maybe"]));
-  all.sort((a, b) => a[0].localeCompare(b[0]));
-  const runs = [];
-  for (const [d, kind] of all) {
-    const prev = runs[runs.length - 1];
-    if (prev && prev.kind === kind && daysInRange(prev.end, d) === 2) prev.end = d;
-    else runs.push({ start: d, end: d, kind });
-  }
-  return runs;
-}
-const fmtRun = (r) => {
-  const a = fmtDate(r.start, { month: "short", day: "numeric" });
-  if (r.start === r.end) return a;
-  const sameMonth = r.start.slice(0, 7) === r.end.slice(0, 7);
-  return `${a} – ${sameMonth ? Number(r.end.slice(8)) : fmtDate(r.end, { month: "short", day: "numeric" })}`;
-};
 
 /* ------------------------------------------------------------------ */
 /* Day picker sheet: one continuous, scrollable calendar.              */
@@ -620,7 +645,7 @@ function openDayPicker({ range, st, origin, focusDate, onChange, onClose }) {
         <div class="dp-weekdays" aria-hidden="true">${WEEKDAYS.map((d) => `<span>${d}</span>`).join("")}</div>
       </div>
       <div class="dp-scroll picker" tabindex="-1">${sheetMonthsHtml(range, st)}</div>
-      <div class="dp-foot"><button type="button" class="btn btn-plain dp-clear">Clear all</button><span>Tap a day · hold &amp; drag to mark several</span></div>
+      <div class="dp-foot"><button type="button" class="btn btn-plain dp-clear">Clear all</button><span>Tap a day · press and drag to mark a whole block</span></div>
     </div>`;
   document.body.appendChild(wrap);
 
@@ -1226,8 +1251,13 @@ function renderHome() {
             </div>
           </div>
           <p class="range-summary" id="rangeSummary"></p>
+          <div class="section-header">Also ask about</div>
+          <div class="group well toggles">
+            <label class="row toggle-row"><span><b>Places</b><small>Everyone suggests places and votes</small></span><input type="checkbox" name="secPlaces" role="switch" checked /></label>
+            <label class="row toggle-row"><span><b>Activities</b><small>Ideas with links, which people can like</small></span><input type="checkbox" name="secActivities" role="switch" checked /></label>
+          </div>
           <div style="margin-top:1.375rem"><button class="btn btn-primary btn-block" type="submit" id="createBtn">${icon("sparkles")} Create event</button></div>
-          <p class="fineprint">${icon("lock")}<span>Once created, an event can’t be edited or deleted — so everyone can trust the link they were sent.</span></p>
+          <p class="fineprint">${icon("lock")}<span>You’re the host: from this browser you can remove entries and turn Places or Activities on or off later. The dates can’t change once it’s created.</span></p>
         </div>
       </form>
     </div>
@@ -1298,10 +1328,17 @@ function renderHome() {
     if (daysInRange(range.start, range.end) > 731) return toast("Pick a range of up to two years", { error: true });
     btn.disabled = true;
     try {
-      const { id } = await api("/events", {
+      const { id, admin } = await api("/events", {
         method: "POST",
-        body: { title, description: form.description.value.trim(), start_date: range.start, end_date: range.end },
+        body: {
+          title,
+          description: form.description.value.trim(),
+          start_date: range.start,
+          end_date: range.end,
+          sections: { places: form.secPlaces.checked, activities: form.secActivities.checked },
+        },
       });
+      if (admin) store.set(`wingman:admin:${id}`, admin);
       const list = store.get("convene:events", []).filter((x) => x.id !== id);
       list.unshift({ id, title, start: range.start, end: range.end, mine: true });
       store.set("convene:events", list.slice(0, 20));
@@ -1437,6 +1474,14 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   navActions.innerHTML = `<button class="btn btn-tinted nav-share" id="navShare" aria-label="Share event">${icon("share")}<span>Share</span></button>`;
   $("#navShare").onclick = () => shareLink(url, event.title);
 
+  const sec = event.sections || { places: true, activities: true };
+  const tabs = [
+    ["calendar", "calendar", "Calendar"],
+    ...(sec.places ? [["destinations", "trophy", "Places"]] : []),
+    ...(sec.activities ? [["activities", "sparkles", "Activities"]] : []),
+  ];
+  if (!tabs.some(([v]) => v === prevTab)) prevTab = current.tab = "calendar";
+  const host = !!data.host;
   const ctaHtml = myResponse
     ? `<button class="btn btn-secondary btn-block" data-act="edit">${icon("pencil")} Edit my response</button>`
     : `<button class="btn btn-primary btn-block" data-act="add">${icon("plus")} Add your availability</button>`;
@@ -1454,26 +1499,45 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
           </div>
           <div class="event-meta">
             <span class="pill">${icon("people")} ${responses.length} ${responses.length === 1 ? "response" : "responses"}</span>
-            <span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>
+            ${sec.places ? `<span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>` : ""}
+            ${host ? `<span class="pill host-pill">${icon("lock")} You’re the host</span>` : ""}
           </div>
           ${
             responses.length
               ? `<div class="people-list"><div class="people-label">Who responded · tap a name to see their days</div><div class="people-chips">${responses
-                  .map((r) => `<button type="button" class="person" data-filter="${esc(r.id)}" aria-pressed="false">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></button>`)
+                  .map(
+                    (r) =>
+                      `<div class="person-row"><button type="button" class="person" data-filter="${esc(r.id)}" aria-pressed="false">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></button>${
+                        host ? `<button type="button" class="person-remove" data-remove-resp="${esc(r.id)}" aria-label="Remove ${esc(r.name)}’s entry">${icon("x")}</button>` : ""
+                      }</div>`,
+                  )
                   .join("")}</div></div>`
               : ""
           }
           ${expiryNotice(event)}
         </div>
         <div class="event-cta fade-in d1">${ctaHtml}</div>
+        ${
+          host
+            ? `<div class="card host-card">
+          <h3>Host settings</h3>
+          <p>Only you see this. Choose what people are asked about.</p>
+          <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
+          <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
+          <p class="host-note">Remove someone’s entry with the × next to their name.</p>
+        </div>`
+            : ""
+        }
       </aside>
       <section class="event-main">
-        <div class="segmented tabs fade-in d2" role="tablist" data-seg="tabs">
+        ${
+          tabs.length > 1
+            ? `<div class="segmented tabs fade-in d2" role="tablist" data-seg="tabs">
           <span class="thumb"></span>
-          <button type="button" data-value="calendar" aria-pressed="${prevTab === "calendar"}">${icon("calendar").replace("<svg", '<svg width="16" height="16"')} Calendar</button>
-          <button type="button" data-value="destinations" aria-pressed="${prevTab === "destinations"}">${icon("trophy").replace("<svg", '<svg width="16" height="16"')} Places</button>
-          <button type="button" data-value="activities" aria-pressed="${prevTab === "activities"}">${icon("sparkles").replace("<svg", '<svg width="16" height="16"')} Activities</button>
-        </div>
+          ${tabs.map(([v, ic, label]) => `<button type="button" data-value="${v}" aria-pressed="${prevTab === v}">${icon(ic).replace("<svg", '<svg width="16" height="16"')} ${label}</button>`).join("")}
+        </div>`
+            : ""
+        }
         <div id="tabBody" class="fade-in d3"></div>
       </section>
     </div>
@@ -1483,11 +1547,41 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
 
   $$('[data-act="add"]').forEach((b) => b.addEventListener("click", () => openFlow()));
   $$('[data-act="edit"]').forEach((b) => b.addEventListener("click", () => openFlow({ edit: { ...mine, response: myResponse } })));
-  setupSegmented($('[data-seg="tabs"]'), (v) => {
-    current.tab = v;
-    exitSelectMode();
-    renderTab();
-  });
+  if ($('[data-seg="tabs"]'))
+    setupSegmented($('[data-seg="tabs"]'), (v) => {
+      current.tab = v;
+      exitSelectMode();
+      renderTab();
+    });
+  // host: remove an entry
+  $$("[data-remove-resp]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const r = current.responses.find((x) => x.id === b.dataset.removeResp);
+      if (!r || !confirm(`Remove ${r.name}’s entry? This can’t be undone.`)) return;
+      try {
+        await api(`/events/${event.id}/responses/${r.id}`, { method: "DELETE" });
+        if (current.filter === r.id) current.filter = null;
+        toast(`${r.name}’s entry was removed`);
+        await renderEvent(event.id, { keepTab: true, quiet: true });
+      } catch (err) {
+        toast(err.message, { error: true });
+      }
+    }),
+  );
+  // host: turn Places / Activities on or off
+  $$("[data-section]").forEach((box) =>
+    box.addEventListener("change", async () => {
+      const next = { ...sec, [box.dataset.section]: box.checked };
+      try {
+        await api(`/events/${event.id}`, { method: "PATCH", body: { sections: next } });
+        toast(`${box.dataset.section === "places" ? "Places" : "Activities"} ${box.checked ? "turned on" : "turned off"}`);
+        await renderEvent(event.id, { keepTab: true, quiet: true });
+      } catch (err) {
+        box.checked = !box.checked;
+        toast(err.message, { error: true });
+      }
+    }),
+  );
   bindCalendar();
   bindQuickActions();
   // tap a name: the calendar shows only that person's days (tap again for everyone)
@@ -2052,7 +2146,11 @@ document.addEventListener("keydown", (e) => {
 /* Guided flow: add / edit availability                                */
 /* ------------------------------------------------------------------ */
 
-const STEPS = ["name", "dates", "destinations", "activities", "review"];
+/** The answer flow's steps: Places and Activities only when the host turned them on. The last step submits. */
+const flowSteps = (event) => {
+  const sec = event.sections || { places: true, activities: true };
+  return ["name", "dates", ...(sec.places ? ["destinations"] : []), ...(sec.activities ? ["activities"] : [])];
+};
 
 let flowProbed = false;
 function openFlow({ edit = null } = {}) {
@@ -2061,6 +2159,8 @@ function openFlow({ edit = null } = {}) {
     setTimeout(probeFlow, 120); // the flow is the most animated screen
   }
   const { event, responses } = current;
+  const STEPS = flowSteps(event);
+  const stepLabel = (step) => `Step ${STEPS.indexOf(step) + 1} of ${STEPS.length}`;
   const others = aggregate(responses, { excludeId: edit?.id });
   const r = edit?.response;
   const st = {
@@ -2081,12 +2181,12 @@ function openFlow({ edit = null } = {}) {
   flow.setAttribute("aria-modal", "true");
   flow.innerHTML = `
     <div class="flow-top">
-      <button class="btn btn-plain" data-act="back">Cancel</button>
+      <button class="btn btn-plain" data-act="cancel">Cancel</button>
       <div class="progress">${STEPS.map(() => "<i></i>").join("")}</div>
       <span></span>
     </div>
     <div class="flow-body"><div class="flow-step"></div></div>
-    <div class="flow-bottom"><div class="inner"><span class="status"></span><button class="btn btn-primary" data-act="next">Continue</button></div></div>`;
+    <div class="flow-bottom"><div class="inner"><button class="btn flow-back" data-act="back">‹ Back</button><span class="status"></span><button class="btn btn-primary" data-act="next">Continue</button></div></div>`;
   document.body.appendChild(flow);
   document.body.style.overflow = "hidden";
 
@@ -2094,6 +2194,7 @@ function openFlow({ edit = null } = {}) {
   const statusEl = $(".status", flow);
   const nextBtn = $('[data-act="next"]', flow);
   const backBtn = $('[data-act="back"]', flow);
+  const cancelBtn = $('[data-act="cancel"]', flow);
 
   const close = () => {
     flow.classList.add("closing");
@@ -2112,8 +2213,9 @@ function openFlow({ edit = null } = {}) {
 
   function updateChrome() {
     $$(".progress i", flow).forEach((el, i) => el.classList.toggle("done", i <= st.step));
-    backBtn.textContent = st.step === 0 ? "Cancel" : "Back";
+    backBtn.hidden = st.step === 0;
     const step = STEPS[st.step];
+    const last = st.step === STEPS.length - 1;
     nextBtn.disabled = false;
     if (step === "name") {
       nextBtn.textContent = "Continue";
@@ -2126,12 +2228,12 @@ function openFlow({ edit = null } = {}) {
       nextBtn.textContent = st.destinations.length ? "Continue" : "Skip";
       statusEl.textContent = st.destinations.length ? `${st.destinations.length} picked` : "";
     } else if (step === "activities") {
-      nextBtn.textContent = st.activities.length || st.likes.size ? "Continue" : "Skip";
       statusEl.textContent = st.activities.length ? `${st.activities.length} added` : "";
-    } else {
+    }
+    if (last) {
+      // the last step sends it: no separate "looking good" screen
       nextBtn.textContent = st.submitting ? "Sending…" : edit ? "Save changes" : "Submit";
-      nextBtn.disabled = st.submitting;
-      statusEl.textContent = "";
+      nextBtn.disabled = st.submitting || (step === "name" && !st.name.trim());
     }
   }
 
@@ -2165,7 +2267,7 @@ function openFlow({ edit = null } = {}) {
       `;
     if (step === "dates")
       return `
-        <div class="eyebrow">Step 2 of 5</div>
+        <div class="eyebrow">${stepLabel("dates")}</div>
         <h2 class="flow-title">${animatedTitle(`When are you *free,* ${st.name.split(" ")[0]}?`)}</h2>
         <p class="flow-lead">Open the calendar and tap the days that work. Dark blue means you’re definitely in, light blue means maybe.</p>
         <button type="button" class="card date-launcher" id="openDays">
@@ -2179,7 +2281,7 @@ function openFlow({ edit = null } = {}) {
       const names = allDestNames();
       const chosen = new Set(st.destinations.map((d) => d.toLowerCase()));
       return `
-        <div class="eyebrow">Step 3 of 5</div>
+        <div class="eyebrow">${stepLabel("destinations")}</div>
         <h2 class="flow-title">${animatedTitle("Where should we *go?*")}</h2>
         <p class="flow-lead">${others.destinations.length ? "Here’s what the group has suggested so far. Tap the ones you’d love — or add your own." : "You’re the first to suggest a place. Add as many as you like."}</p>
         <div class="add-row"><input id="destInput" maxlength="60" placeholder="City, country, place…" enterkeyhint="done" /><button class="btn btn-secondary" id="destAdd" type="button">${icon("plus")} Add</button></div>
@@ -2198,7 +2300,7 @@ function openFlow({ edit = null } = {}) {
       const dests = allDestNames();
       const othersActs = others.activities;
       return `
-        <div class="eyebrow">Step 4 of 5</div>
+        <div class="eyebrow">${stepLabel("activities")}</div>
         <h2 class="flow-title">${animatedTitle("What should we *do* there?")}</h2>
         <p class="flow-lead">Suggest activities and paste links — a hike, a museum, a restaurant, a festival.</p>
         <div class="card pad">
@@ -2221,19 +2323,7 @@ function openFlow({ edit = null } = {}) {
         }
       `;
     }
-    // review
-    const firstYes = [...st.yes].sort()[0];
-    return `
-      <div class="eyebrow">Step 5 of 5</div>
-      <h2 class="flow-title">${animatedTitle("Looking *good.* Ready?")}</h2>
-      <p class="flow-lead">Here’s what you’ll add to <b>${esc(event.title)}</b>.</p>
-      <div class="summary">
-        <div class="card"><h4>You</h4><div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.375rem">${avatar(st.name)}<span class="big big-name">${esc(st.name)}</span></div></div>
-        <div class="card"><h4>Days</h4><div class="big">${st.yes.size}<span class="big-unit"> definitely</span></div><p>${st.maybe.size} maybe${firstYes ? ` · first: ${esc(fmtDate(firstYes))}` : ""}</p></div>
-        <div class="card"><h4>Places</h4><p>${st.destinations.length ? esc(st.destinations.join(", ")) : "None yet."}</p></div>
-        <div class="card"><h4>Activities</h4><p>${st.activities.length ? esc(st.activities.map((a) => a.title).join(", ")) : "None yet."}${st.likes.size ? ` · ${st.likes.size} liked` : ""}</p></div>
-      </div>
-    `;
+    return "";
   }
 
   function bindStep(step, el) {
@@ -2250,12 +2340,12 @@ function openFlow({ edit = null } = {}) {
       const launcher = $("#openDays", el);
       const summary = $("#daySummary", el);
       const renderSummary = () => {
-        const runs = dayRuns(st);
-        summary.innerHTML = runs.length
-          ? `<div class="preview-label">Your days</div><div class="chips">${runs
-              .slice(0, 14)
-              .map((r) => `<button type="button" class="chip run ${r.kind}" data-focus="${r.start}"><span class="swatch ${r.kind}"></span>${esc(fmtRun(r))}</button>`)
-              .join("")}${runs.length > 14 ? `<span class="chip more">+${runs.length - 14} more</span>` : ""}</div>`
+        // your days marked on the calendar itself; tap any day to open the picker right there
+        summary.innerHTML = st.yes.size + st.maybe.size
+          ? `<div class="preview-label">Your days <span class="legend-inline"><span class="swatch yes"></span>Definitely <span class="swatch maybe"></span>Maybe</span></div>
+             <div class="your-cal">${monthsHtml(eventRange(event), (date) =>
+               st.yes.has(date) ? { cls: "pyes", label: "definitely" } : st.maybe.has(date) ? { cls: "pmaybe", label: "maybe" } : {},
+             )}</div>`
           : `<p class="empty-note">No days marked yet.</p>`;
         updateChrome();
       };
@@ -2276,8 +2366,8 @@ function openFlow({ edit = null } = {}) {
       };
       launcher.addEventListener("click", () => openPicker());
       summary.addEventListener("click", (e) => {
-        const chip = e.target.closest("[data-focus]");
-        if (chip) openPicker(chip.dataset.focus);
+        const day = e.target.closest("[data-date]");
+        if (day) openPicker(day.dataset.date);
       });
       renderSummary();
       if (!st.yes.size && !st.maybe.size && !st.pickerShown) {
@@ -2419,7 +2509,7 @@ function openFlow({ edit = null } = {}) {
     if (step === "dates" && st.yes.size + st.maybe.size === 0) {
       if (!confirm("You haven’t marked any days. Continue anyway?")) return;
     }
-    if (step === "review") return submit();
+    if (st.step === STEPS.length - 1) return submit();
     st.step++;
     show(1);
   }
@@ -2430,6 +2520,7 @@ function openFlow({ edit = null } = {}) {
     st.step--;
     show(-1);
   });
+  cancelBtn.addEventListener("click", close);
 
   show(1);
 }

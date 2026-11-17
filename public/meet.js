@@ -260,7 +260,8 @@ export function renderMeetCreate() {
     };
     $("#mcCreate").disabled = true;
     try {
-      const { id } = await api("/meetings", { method: "POST", body });
+      const { id, admin } = await api("/meetings", { method: "POST", body });
+      if (admin) store.set(`wingman:admin:${id}`, admin); // you're the host of this meeting
       const list = store.get("wingman:meets", []).filter((x) => x.id !== id);
       list.unshift({ id, title, kind: "dates", mine: true });
       if (body.creator) store.set("convene:name", body.creator);
@@ -274,8 +275,8 @@ export function renderMeetCreate() {
   });
 }
 
-/* Tap a day to toggle it. Press and drag (on touch: hold, then drag) to select EVERY date between the
-   day you started on and the one under your finger, across weeks and months; the calendar scrolls
+/* Tap a day to toggle it. Press and drag (on touch: hold, then drag) to select the RECTANGLE between the
+   day you started on and the one under your finger, like the times grid; the calendar scrolls
    when you drag near its top or bottom edge. Starting on a selected day removes the range instead. */
 function attachRangeDrag(root, st, open, sync) {
   let drag = null;
@@ -286,9 +287,28 @@ function attachRangeDrag(root, st, open, sync) {
     const c = document.elementFromPoint(x, y)?.closest?.(".day[data-date]");
     return c && !c.disabled && root.contains(c) ? c : null;
   };
+  // the rectangle between the day you pressed and the day under your finger, like the times grid
+  const centre = (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
   const between = (a, b) => {
-    const [lo, hi] = a < b ? [a, b] : [b, a];
-    return [...root.querySelectorAll(".day[data-date]")].map((el) => el.dataset.date).filter((d) => d >= lo && d <= hi && open(d));
+    const ea = root.querySelector(`.day[data-date="${a}"]`);
+    const eb = root.querySelector(`.day[data-date="${b}"]`);
+    if (!ea || !eb) return [a];
+    const p = centre(ea);
+    const q = centre(eb);
+    const x0 = Math.min(p.x, q.x) - 2;
+    const x1 = Math.max(p.x, q.x) + 2;
+    const y0 = Math.min(p.y, q.y) - 2;
+    const y1 = Math.max(p.y, q.y) + 2;
+    return [...root.querySelectorAll(".day[data-date]")]
+      .filter((el) => {
+        const c = centre(el);
+        return c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1;
+      })
+      .map((el) => el.dataset.date)
+      .filter(open);
   };
   const paint = (to) => {
     const range = new Set(between(drag.from, to));
@@ -569,14 +589,14 @@ function paintBody() {
             : `<button type="button" class="btn btn-primary btn-block" id="addAvail">${icon(M.me ? "pencil" : "plus")} ${M.me ? "Edit your availability" : "Add availability"}</button>`
         }
         <div class="card mtg-people">
-          <h3>Responses <span>${n}</span></h3>
+          <h3>Responses <span>${n}</span>${M.host ? '<small class="host-tag">You’re the host</small>' : ""}</h3>
           ${
             n
               ? `<ul class="mtg-plist">${M.people
                   .map(
-                    (p) => `<li><button type="button" class="person${M.filter === p.id ? " on" : ""}" data-person="${esc(p.id)}" aria-pressed="${M.filter === p.id}">${avatar(p.name, "sm")}<span>${esc(p.name)}${
+                    (p) => `<li class="person-row"><button type="button" class="person${M.filter === p.id ? " on" : ""}" data-person="${esc(p.id)}" aria-pressed="${M.filter === p.id}">${avatar(p.name, "sm")}<span>${esc(p.name)}${
                       M.me && p.id === M.me.id ? ' <small>(you)</small>' : ""
-                    }</span></button></li>`,
+                    }</span></button>${M.host && !editing ? `<button type="button" class="person-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${esc(p.name)}’s entry">${icon("x")}</button>` : ""}</li>`,
                   )
                   .join("")}</ul><p class="mtg-side-note">Tap a name to see only their times.</p>`
               : `<p class="mtg-side-note">Be the first: add the times you can make.</p>`
@@ -604,6 +624,28 @@ function paintBody() {
     M.filter = null;
     paintBody();
   });
+  // the creator can remove someone's entry
+  body.querySelectorAll("[data-remove-person]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const p = M.people.find((x) => x.id === b.dataset.removePerson);
+      if (!p || !confirm(`Remove ${p.name}’s entry? This can’t be undone.`)) return;
+      try {
+        await K.api(`/meetings/${M.meeting.id}/people/${p.id}`, { method: "DELETE" });
+        M.people = M.people.filter((x) => x.id !== p.id);
+        if (M.filter === p.id) M.filter = null;
+        if (M.focus) M.focus = null;
+        if (M.me && M.me.id === p.id) {
+          store.set(`wingman:meet:${M.meeting.id}`, null);
+          M.me = null;
+          M.mine = { yes: new Set(), maybe: new Set() };
+        }
+        K.toast(`${p.name}’s entry was removed`);
+        paintBody();
+      } catch (err) {
+        K.toast(err.message, { error: true });
+      }
+    }),
+  );
   body.querySelectorAll("[data-person]").forEach((b) =>
     b.addEventListener("click", () => {
       if (M.editing) return;

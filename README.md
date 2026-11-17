@@ -13,12 +13,11 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
 ## Trip days
 
 1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
-2. **Share the link.** Each person goes through a short animated flow:
+2. **Share the link.** Each person goes through a short flow (Back sits next to Continue; the last step submits, no separate review screen):
    - enters their name
-   - marks days on the event's calendar: **dark blue** for *definitely*, **light blue** for *maybe* (tap a day, or press and hold then drag to mark many days)
-   - picks or suggests **destinations** (they see what others suggested)
-   - adds **activities** with pasted links, for a destination or in general, and can like other people's ideas
-   - submits
+   - marks days on the event's calendar: **dark blue** for *definitely*, **light blue** for *maybe*. Tap a day, or press and drag to mark the whole rectangle between two days, like the meeting times grid (on touch, hold a day first). Their days then show on a calendar.
+   - picks or suggests **destinations** (they see what others suggested), if the host turned Places on
+   - adds **activities** with pasted links, for a destination or in general, and can like other people's ideas, if the host turned Activities on
 3. **See the result.**
    - **Calendar heatmap:** the darker a day, the more people can come. Tap a day to see who said yes, maybe and no.
    - **Who responded:** tap a name to see only that person's days (definitely and maybe); tap again or **Show everyone** to go back.
@@ -28,6 +27,8 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
    - **Activities:** ideas grouped by destination, with links and likes.
 
 People can edit their own response later from the same device. The device keeps a private token for this. There are no accounts.
+
+**The host** is whoever created the event, from that browser (it keeps a private admin key; the server checks it). The host can turn **Places** and **Activities** on or off (also when creating), and remove anyone's entry with the × next to their name. Meetings work the same way: their creator can remove entries. Events created before this have no host.
 
 ## Meeting times
 

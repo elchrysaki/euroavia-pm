@@ -2020,3 +2020,44 @@ body:has(.flow) #app, body:has(.flow) .topbar, body:has(.flow) .action-bar { vis
 .topbar .brand .wordmark { font-size: 1.3125rem; letter-spacing: 0.02em; -webkit-text-stroke: 0.6px #123468; background-image: linear-gradient(180deg, #8fb0e0 0%, #2a5498 40%, #0a2350 52%, #4c7cc4 72%, #1a3a70 100%); }
 @media (prefers-color-scheme: dark) { .topbar .brand .wordmark { -webkit-text-stroke: 0.5px rgba(230, 240, 255, 0.55); background-image: linear-gradient(180deg, #ffffff 0%, #e4eefb 40%, #8ea6c7 52%, #f0f6ff 72%, #a9bcd6 100%); } }
 @media (max-width: 380px) { .topbar .brand .wordmark { font-size: 1.0625rem; } }
+
+/* ---- Answer flow: Back sits right next to Continue ---- */
+.flow-bottom .inner { gap: 0.75rem; }
+.flow-back { min-height: 3rem; padding: 0 1.125rem; border-radius: 999px; font-size: 1rem; }
+.flow-bottom .status { flex: 1; text-align: center; }
+.flow-bottom .btn-primary { min-height: 3rem; border-radius: 999px; padding: 0 1.5rem; }
+@media (max-width: 420px) { .flow-bottom .status { display: none; } .flow-bottom .btn-primary { flex: 1; } }
+/* your days, marked on the calendar */
+.legend-inline { display: inline-flex; align-items: center; gap: 0.375rem; margin-left: 0.75rem; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--label-2); font-size: 0.875rem; }
+.your-cal .months { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.75rem; }
+.your-cal .month { padding: 0.875rem; }
+.your-cal .day { cursor: pointer; }
+
+/* ---- switches (trip create + host settings) ---- */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
+.toggle-row span { display: grid; gap: 0.125rem; }
+.toggle-row b { font-size: 1.0625rem; font-weight: 600; }
+.toggle-row small { font-size: 0.9375rem; color: var(--label-2); }
+.toggle-row input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none; width: 3.25rem; height: 2rem; border-radius: 999px; margin: 0;
+  background: var(--fill-2); position: relative; cursor: pointer; transition: background-color .2s var(--ease);
+}
+.toggle-row input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: calc(2rem - 6px); height: calc(2rem - 6px); border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: transform .25s var(--ease); }
+.toggle-row input[type="checkbox"]:checked { background: var(--accent); }
+.toggle-row input[type="checkbox"]:checked::after { transform: translateX(1.25rem); }
+.toggle-row input[type="checkbox"]:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.toggles .toggle-row { padding: 0.75rem 1rem; }
+.host-card { padding: 1.25rem; margin-top: 1rem; display: grid; gap: 0.875rem; }
+.host-card h3 { margin: 0; font-size: 1.125rem; }
+.host-card p { margin: 0; font-size: 0.9375rem; color: var(--label-2); }
+.host-card .host-note { font-size: 0.875rem; }
+.host-pill { color: var(--accent) !important; }
+.host-tag { margin-left: auto; font-size: 0.8125rem; font-weight: 600; color: var(--accent); }
+
+/* ---- host: remove an entry ---- */
+.person-row { display: flex; align-items: center; gap: 0.25rem; list-style: none; }
+.person-row .person { flex: 1; min-width: 0; }
+.person-remove { flex: none; width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; background: transparent; color: var(--label-3); display: grid; place-items: center; cursor: pointer; }
+.person-remove svg { width: 18px; height: 18px; }
+.person-remove:hover, .person-remove:focus-visible { background: color-mix(in srgb, #e5484d 14%, transparent); color: #d93036; }
+.best-list[hidden] { display: none !important; }

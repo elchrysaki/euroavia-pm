@@ -33,6 +33,11 @@ export async function freePin(env) {
   return randomId(10); // practically never: fall back to a long id
 }
 
+/** The creator's browser keeps the admin token that lets it remove entries. */
+const isHost = (request, m) => {
+  const t = request.headers.get("x-wingman-admin") || "";
+  return !!m.admin_token && t.length > 10 && t === m.admin_token;
+};
 const randomId = (len) => Array.from(crypto.getRandomValues(new Uint8Array(len)), (b) => ALPHABET[b % ALPHABET.length]).join("");
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -87,6 +92,7 @@ export function ensureMeetSchema(env) {
           "ALTER TABLE meetings ADD COLUMN creator TEXT",
           "ALTER TABLE meetings ADD COLUMN step INTEGER",
           "ALTER TABLE meet_people ADD COLUMN maybe TEXT",
+          "ALTER TABLE meetings ADD COLUMN admin_token TEXT",
         ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
       ),
     )
@@ -195,13 +201,14 @@ export async function handleMeetings(request, env, parts) {
       for (const d of days) for (let mm = startMin; mm < endMin; mm += STEP) slots.push(`w${d}:${mm}`);
     }
     const id = await freePin(env);
+    const admin = randomId(24);
     const now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO meetings (id, title, description, creator, step, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO meetings (id, title, description, creator, step, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen, admin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, description, creator, STEP, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now)
+      .bind(id, title, description, creator, STEP, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now, admin)
       .run();
-    return json({ id }, 201);
+    return json({ id, admin }, 201);
   }
 
   const mid = parts[1];
@@ -214,7 +221,11 @@ export async function handleMeetings(request, env, parts) {
     const { results } = await env.DB.prepare("SELECT id, name, slots, maybe FROM meet_people WHERE meeting_id = ? ORDER BY created_at")
       .bind(mid)
       .all();
-    return json({ meeting: publicMeeting(m), people: results.map((r) => ({ id: r.id, name: r.name, slots: JSON.parse(r.slots), maybe: JSON.parse(r.maybe || "[]") })) });
+    return json({
+      meeting: publicMeeting(m),
+      people: results.map((r) => ({ id: r.id, name: r.name, slots: JSON.parse(r.slots), maybe: JSON.parse(r.maybe || "[]") })),
+      host: isHost(request, m),
+    });
   }
 
   // POST /api/meetings/:id/signin  { name } → { id, token, name, slots, maybe }   (no passwords)
@@ -256,6 +267,15 @@ export async function handleMeetings(request, env, parts) {
       .bind(JSON.stringify(slots), JSON.stringify(maybe), Date.now(), parts[3])
       .run();
     return json({ ok: true, count: slots.length });
+  }
+
+  // DELETE /api/meetings/:id/people/:pid — the creator only: remove someone's entry
+  if (parts.length === 4 && parts[2] === "people" && method === "DELETE") {
+    const m = await loadMeeting(env, mid);
+    if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
+    if (!isHost(request, m)) return fail("Only the person who created this meeting can remove entries.", 403);
+    await env.DB.prepare("DELETE FROM meet_people WHERE id = ? AND meeting_id = ?").bind(parts[3], mid).run();
+    return json({ ok: true });
   }
 
   return fail("Not found.", 404);

@@ -158,10 +158,27 @@ async function deleteEvent(env, id) {
   ]);
 }
 
+/** Which optional sections the host turned on (both, unless they chose otherwise). */
+function parseSections(v) {
+  let o = {};
+  try {
+    o = typeof v === "string" ? JSON.parse(v) : v || {};
+  } catch {
+    o = {};
+  }
+  return { places: o.places !== false, activities: o.activities !== false };
+}
+const cleanSections = (v) => ({ places: v?.places !== false, activities: v?.activities !== false });
+/** The host is whoever created the event: their browser keeps the admin token. */
+const isHost = (request, event) => {
+  const t = request.headers.get("x-wingman-admin") || "";
+  return !!event.admin_token && t.length > 10 && t === event.admin_token;
+};
+
 /** Loads an event; deletes it if it has expired; records this visit (keeps it alive). */
 async function getEvent(env, id, { touch = true } = {}) {
   const row = await env.DB.prepare(
-    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen FROM events WHERE id = ?",
+    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections FROM events WHERE id = ?",
   )
     .bind(id)
     .first();
@@ -177,6 +194,8 @@ async function getEvent(env, id, { touch = true } = {}) {
     event.last_seen = now;
   }
   event.delete_at = deleteAt(event);
+  event.sections = parseSections(event.sections);
+  Object.defineProperty(event, "admin_token", { value: event.admin_token, enumerable: false }); // never sent to the page
   delete event.last_seen;
   return event;
 }
@@ -231,12 +250,13 @@ async function handleApi(request, env, url) {
 
     await ensureMeetSchema(env); // PINs are unique across trips and meetings
     const id = await freePin(env);
+    const admin = randomId(24);
     await env.DB.prepare(
-      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now(), Date.now())
+      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now(), Date.now(), admin, JSON.stringify(cleanSections(body.sections)))
       .run();
-    return json({ id }, 201);
+    return json({ id, admin }, 201);
   }
 
   if (parts[0] !== "events" || !parts[1] || !/^[A-Za-z0-9]{6,16}$/.test(parts[1])) {
@@ -260,7 +280,27 @@ async function handleApi(request, env, url) {
       updated_at: r.updated_at,
       ...JSON.parse(r.data),
     }));
-    return json({ event, responses });
+    return json({ event, responses, host: isHost(request, event) });
+  }
+
+  // PATCH /api/events/:id  { sections } — host only: turn Places / Activities on or off
+  if (parts.length === 2 && method === "PATCH") {
+    const event = await getEvent(env, eventId);
+    if (!event) return fail("This event doesn’t exist or has been removed.", 404);
+    if (!isHost(request, event)) return fail("Only the person who created this event can change it.", 403);
+    const body = await readBody(request);
+    const sections = cleanSections(body?.sections);
+    await env.DB.prepare("UPDATE events SET sections = ? WHERE id = ?").bind(JSON.stringify(sections), eventId).run();
+    return json({ sections });
+  }
+
+  // DELETE /api/events/:id/responses/:rid — host only: remove someone's entry
+  if (parts.length === 4 && parts[2] === "responses" && method === "DELETE") {
+    const event = await getEvent(env, eventId);
+    if (!event) return fail("This event doesn’t exist or has been removed.", 404);
+    if (!isHost(request, event)) return fail("Only the person who created this event can remove entries.", 403);
+    await env.DB.prepare("DELETE FROM responses WHERE id = ? AND event_id = ?").bind(parts[3], eventId).run();
+    return json({ ok: true });
   }
 
   // POST /api/events/:id/responses
@@ -323,7 +363,7 @@ function ensureSchema(env) {
   ])
     .then(async () => {
       // databases created by older versions: add the newer columns (fails harmlessly if present)
-      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"]]) {
+      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"]]) {
         await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} ${type}`).run().catch(() => {});
       }
     })
