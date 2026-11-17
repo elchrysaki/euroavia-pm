@@ -47,7 +47,7 @@
       d.setAttribute("data-perf-reason", why);
     })();
   </script>
-  <link rel="stylesheet" href="/styles.css?v=22" />
+  <link rel="stylesheet" href="/styles.css?v=24" />
 </head>
 <body>
   <div class="backdrop" aria-hidden="true">
@@ -64,10 +64,21 @@
     <div class="nav-actions" id="navActions"></div>
   </header>
 
+  <nav class="tabbar" id="tabbar" aria-label="Sections">
+    <a href="/dashboard" data-link data-tab="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7.5" height="9" rx="2"/><rect x="13" y="3.5" width="7.5" height="5.5" rx="2"/><rect x="3.5" y="14.5" width="7.5" height="6" rx="2"/><rect x="13" y="11" width="7.5" height="9.5" rx="2"/></svg>
+      <span>Dashboard</span>
+    </a>
+    <a href="/new" data-link data-tab="new">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg>
+      <span>Create new</span>
+    </a>
+  </nav>
+
   <main id="app" class="app" aria-live="polite"></main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/app.js?v=23" type="module"></script>
+  <script src="/app.js?v=25" type="module"></script>
 </body>
 </html>

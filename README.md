@@ -5,6 +5,13 @@ A EUROAVIA no-login group planner for phone, tablet and desktop. The home page (
 - **Trip days** (`/plan`): works like Lettucemeet, with destination voting and activity ideas. Described below.
 - **Meeting times** (`/meet`): works like When2meet. Described in [Meeting times](#meeting-times).
 
+Two tabs (like Blitz) sit in the navbar on wide screens and in a bottom tab bar on phones:
+
+- **Dashboard** (`/dashboard`, and `/` once you have plans): every trip and meeting you created or opened on this device, with live counts (people answered, best date or most people free at once). Plans the server has deleted drop off the list.
+- **Create new** (`/new`, and `/` on a first visit): the two tools.
+
+The background is a colour-graded brushed-blue-metal photo: an icy grade for light mode (`public/bg-metal-light.jpg`) and a deep electric grade for dark mode (`public/bg-metal-dark.jpg`).
+
 1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
 2. **Share the link.** Each person goes through a short animated flow:
    - enters their name

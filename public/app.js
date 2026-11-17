@@ -826,8 +826,26 @@ let route = function route() {
   const mt = location.pathname.match(/^\/m\/([A-Za-z0-9]{6,16})\/?$/);
   if (mt) return meetModule().then((x) => x.renderMeeting(mt[1]));
   if (/^\/meet\/?$/.test(location.pathname)) return meetModule().then((x) => x.renderMeetCreate());
-  if (/^\/plan\/?$/.test(location.pathname)) return renderHome();
-  return renderHub();
+  if (/^\/plan\/?$/.test(location.pathname)) return setTab(null), renderHome();
+  if (/^\/new\/?$/.test(location.pathname)) return setTab("new"), renderHub();
+  if (/^\/dashboard\/?$/.test(location.pathname) || (location.pathname === "/" && myItems().length)) return setTab("dashboard"), renderDashboard();
+  return setTab("new"), renderHub();
+}
+
+/* Tab bar (like Blitz): Dashboard / Create new. In the navbar on wide screens, at the bottom on phones. */
+function setTab(name) {
+  document.querySelectorAll("#tabbar [data-tab]").forEach((a) => {
+    if (a.dataset.tab === name) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+}
+
+/** Everything this device has created or opened, newest first. */
+function myItems() {
+  return [
+    ...store.get("convene:events", []).map((e) => ({ kind: "trip", id: e.id, title: e.title, href: `/e/${e.id}`, sub: e.start ? fmtRange(e.start, e.end) : e.year || "" })),
+    ...store.get("wingman:meets", []).map((m) => ({ kind: "meet", id: m.id, title: m.title, href: `/m/${m.id}`, sub: m.kind === "week" ? "Weekly" : "" })),
+  ];
 }
 
 /* Meeting times live in their own module, loaded the first time they're needed. */
@@ -846,6 +864,99 @@ function meetModule() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Dashboard                                                           */
+/* ------------------------------------------------------------------ */
+
+async function renderDashboard() {
+  document.title = "Dashboard — Wingman";
+  const items = myItems();
+  app.innerHTML = `
+    <section class="dash-head">
+      <p class="eyebrow fade-in">${icon("grid")} Dashboard</p>
+      <h1 class="hub-title fade-in d1">Your plans.</h1>
+      <div class="dash-stats fade-in d1">
+        <div><b id="stPlans">${items.length}</b><span>Active plans</span></div>
+        <div><b id="stPeople">–</b><span>People answered</span></div>
+        <div><b id="stNew">–</b><span>Busiest plan</span></div>
+      </div>
+    </section>
+    ${
+      items.length
+        ? `<div class="dash-list">${items
+            .map(
+              (it, i) => `<a class="dash-card card fade-in" style="animation-delay:${Math.min(i, 8) * 40}ms" href="${esc(it.href)}" data-link data-id="${esc(it.id)}">
+              <span class="dash-ico ${it.kind}">${icon(it.kind === "trip" ? "calendar" : "clock")}</span>
+              <span class="dash-main">
+                <span class="dash-kind">${it.kind === "trip" ? "Trip days" : "Meeting times"}</span>
+                <b class="dash-title">${esc(it.title)}</b>
+                <span class="dash-sub" data-sub>${esc(it.sub || "Loading…")}</span>
+              </span>
+              <span class="dash-count" data-count><b>–</b><span>people</span></span>
+            </a>`,
+            )
+            .join("")}</div>`
+        : `<div class="empty card" style="margin-top:1.5rem"><div class="glyph">${icon("sparkles")}</div><h3>Nothing here yet</h3><p>Plans you create or open on this device show up here.</p><a class="btn btn-primary" href="/new" data-link style="margin-top:0.75rem">${icon("plus")} Create new</a></div>`
+    }
+    ${items.length ? `<a class="btn btn-primary dash-new fade-in d2" href="/new" data-link>${icon("plus")} Create new</a>` : ""}`;
+  if (!items.length) return;
+
+  let people = 0;
+  let busiest = null;
+  await Promise.all(
+    items.map(async (it) => {
+      const card = app.querySelector(`.dash-card[data-id="${CSS.escape(it.id)}"]`);
+      try {
+        const d = await api(it.kind === "trip" ? `/events/${it.id}` : `/meetings/${it.id}`);
+        const list = it.kind === "trip" ? d.responses : d.people;
+        const n = list.length;
+        people += n;
+        if (!busiest || n > busiest.n) busiest = { n, title: it.title };
+        if (!card) return;
+        card.querySelector("[data-count] b").textContent = n;
+        card.querySelector("[data-count] span").textContent = n === 1 ? "person" : "people";
+        card.querySelector("[data-sub]").textContent = it.kind === "trip" ? tripLine(d, n) : meetLine(d, n);
+      } catch (err) {
+        // gone (expired) or offline: say so, and forget it if the server no longer has it
+        if (card) {
+          card.classList.add("gone");
+          card.querySelector("[data-sub]").textContent = /exist|removed|not found/i.test(err.message) ? "No longer available" : "Couldn’t refresh";
+        }
+        if (/exist|removed|not found/i.test(err.message)) {
+          const key = it.kind === "trip" ? "convene:events" : "wingman:meets";
+          store.set(key, store.get(key, []).filter((x) => x.id !== it.id));
+        }
+      }
+    }),
+  );
+  const st = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  };
+  st("stPeople", people);
+  st("stNew", busiest && busiest.n ? busiest.title : "–");
+}
+
+function tripLine(d, n) {
+  if (!n) return "Waiting for the first answer";
+  const score = new Map();
+  for (const r of d.responses) {
+    for (const x of r.yes || []) score.set(x, (score.get(x) || 0) + 1);
+    for (const x of r.maybe || []) score.set(x, (score.get(x) || 0) + 0.5);
+  }
+  let best = null;
+  for (const [day, v] of score) if (!best || v > best[1] || (v === best[1] && day < best[0])) best = [day, v];
+  return best ? `Best so far: ${fmtDate(best[0], { weekday: "short", day: "numeric", month: "short" })}` : "No days marked yet";
+}
+
+function meetLine(d, n) {
+  if (!n) return "Waiting for the first answer";
+  const count = new Map();
+  for (const p of d.people) for (const s of p.slots) count.set(s, (count.get(s) || 0) + 1);
+  const max = Math.max(0, ...count.values());
+  return max ? `Up to ${max} of ${n} free at the same time` : "No times marked yet";
+}
+
+/* ------------------------------------------------------------------ */
 /* Hub: Wingman Tools                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -861,10 +972,6 @@ function renderHub() {
     const a = Math.max(0.06, Math.min(1, Math.sin((r + 1) * 0.55) * Math.cos((c - 2) * 0.6) * 1.15));
     return `<span style="--a:${a.toFixed(2)};--d:${((r + c) % 6) * 0.2}s"></span>`;
   }).join("");
-  const recent = [
-    ...store.get("convene:events", []).map((e) => ({ href: `/e/${e.id}`, title: e.title, ico: "calendar", sub: e.start ? fmtRange(e.start, e.end) : e.year || "Trip days" })),
-    ...store.get("wingman:meets", []).map((m) => ({ href: `/m/${m.id}`, title: m.title, ico: "clock", sub: m.kind === "week" ? "Weekly times" : "Meeting times" })),
-  ].slice(0, 10);
   app.innerHTML = `
     <section class="hub-hero">
       <p class="eyebrow fade-in">${icon("plane")} Wingman Tools</p>
@@ -889,17 +996,6 @@ function renderHub() {
         <span class="btn btn-primary btn-block">${icon("clock")} Schedule a meeting</span>
       </a>
     </div>
-    ${
-      recent.length
-        ? `<div class="section-header">Your recent</div>
-           <div class="card group">${recent
-             .map(
-               (e) =>
-                 `<a class="row" href="${esc(e.href)}" data-link style="text-decoration:none;color:inherit"><span class="feature-icon" style="width:30px;height:30px">${icon(e.ico)}</span><span style="flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.title)}</span><span style="color:var(--label-3);font-size:0.8125rem">${esc(e.sub)}</span></a>`,
-             )
-             .join("")}</div>`
-        : ""
-    }
     <p class="fineprint hub-fine">${icon("lock")}<span>Nothing to sign up for. Events are deleted a month after their last date, or after two months nobody opens them.</span></p>`;
 }
 
