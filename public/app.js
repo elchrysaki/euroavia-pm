@@ -819,6 +819,8 @@ let route = function route() {
   document.body.style.overflow = "";
   navActions.innerHTML = "";
   window.scrollTo(0, 0);
+  // trip pages have their own bottom action bar on phones: the tab bar steps aside there
+  document.body.classList.toggle("trip-page", /^\/(e|created)\//.test(location.pathname));
   const m = location.pathname.match(/^\/e\/([A-Za-z0-9]{6,16})\/?$/);
   if (m) return renderEvent(m[1]);
   const c = location.pathname.match(/^\/created\/([A-Za-z0-9]{6,16})\/?$/);

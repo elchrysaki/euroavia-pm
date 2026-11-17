@@ -293,6 +293,7 @@ function attachRangeDrag(root, st, open, sync) {
     sync();
   };
   const begin = (cell) => {
+    document.body.classList.add("dragging-dates");
     drag = { from: cell.dataset.date, add: !st.yes.has(cell.dataset.date), before: new Set(st.yes), last: cell.dataset.date, y: 0 };
     paint(drag.from);
   };
@@ -324,6 +325,8 @@ function attachRangeDrag(root, st, open, sync) {
     autoscroll();
   };
   const finish = () => {
+    start?.cell.classList.remove("pressing");
+    document.body.classList.remove("dragging-dates");
     clearTimeout(hold);
     hold = null;
     cancelAnimationFrame(scrollRaf);
@@ -336,6 +339,7 @@ function attachRangeDrag(root, st, open, sync) {
     const cell = e.target.closest(".day[data-date]");
     if (!cell || cell.disabled) return;
     start = { x: e.clientX, y: e.clientY, cell, type: e.pointerType };
+    cell.classList.add("pressing");
     if (e.pointerType === "mouse" || e.pointerType === "pen") {
       e.preventDefault();
       begin(cell);
@@ -351,6 +355,7 @@ function attachRangeDrag(root, st, open, sync) {
     if (!drag && hold && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) {
       clearTimeout(hold); // moved before the hold: it's a scroll
       hold = null;
+      start.cell.classList.remove("pressing");
       start = null;
     }
     if (drag && start?.type !== "touch") move(e.clientX, e.clientY);

@@ -1574,3 +1574,22 @@ body:has(.flow) .tabbar, body:has(.sheet-wrap) .tabbar, body:has(.dp-wrap) .tabb
 }
 .mc-cta, .mc-cta { position: static; }
 #mcSummary { margin-bottom: var(--sp-4); }
+@media (max-width: 719px) { body.trip-page .tabbar { display: none; } }
+
+/* ---- Clear "you're selecting" feedback on every date picker ----
+   selected days: solid electric blue with white numbers and a check-glow; the day under your finger
+   lifts and rings; days swept by a drag ring in the accent colour while you're still dragging. */
+.picker .day.yes, .dp .day.yes, .mc-scroll .day.yes {
+  background: linear-gradient(180deg, #1f74f5, #0645c4) !important; color: #fff !important; font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 1.5px rgba(10, 92, 230, 0.55), 0 4px 12px -4px rgba(10, 92, 230, 0.7) !important;
+}
+.picker .day.maybe, .dp .day.maybe {
+  background: linear-gradient(180deg, #bfe0ff, #8cc6ff) !important; color: #06306f !important; font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 1.5px rgba(60, 150, 255, 0.55) !important;
+}
+@media (prefers-color-scheme: dark) {
+  .picker .day.maybe, .dp .day.maybe { background: linear-gradient(180deg, #2c6fb8, #1f5596) !important; color: #e8f3ff !important; }
+}
+.picker .day.pressing, .dp .day.pressing, .mc-scroll .day.pressing { transform: scale(.92); box-shadow: 0 0 0 2.5px var(--accent) !important; }
+.mc-scroll .day.ranging { box-shadow: 0 0 0 2.5px var(--accent), 0 0 12px rgba(10, 120, 255, .55) !important; }
+body.dragging-dates, body.dragging-dates * { cursor: grabbing !important; }
