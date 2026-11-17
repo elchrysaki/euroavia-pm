@@ -1,3 +1,4 @@
+import { handleMeetings, sweepMeetings, ensureMeetSchema } from "./meet.js";
 // Wingman — Cloudflare Worker API.
 // Static files in /public are served by the assets binding; this worker only handles /api/*.
 
@@ -194,6 +195,8 @@ async function sweepExpired(env) {
 
 async function handleApi(request, env, url) {
   const parts = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
+  const meet = await handleMeetings(request, env, parts); // /api/meetings/* (meeting times tool)
+  if (meet) return meet;
   const method = request.method;
 
   // POST /api/events
@@ -319,7 +322,8 @@ function ensureSchema(env) {
 export default {
   async scheduled(controller, env, ctx) {
     await ensureSchema(env);
-    ctx.waitUntil(sweepExpired(env));
+    await ensureMeetSchema(env);
+    ctx.waitUntil(Promise.all([sweepExpired(env), sweepMeetings(env)]));
   },
   async fetch(request, env) {
     const url = new URL(request.url);

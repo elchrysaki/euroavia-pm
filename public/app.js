@@ -168,6 +168,7 @@ const icon = (name) => {
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4.5a3 3 0 0 0 3.5 4M16 6h3.5a3 3 0 0 1-3.5 4M12 13v4M8.5 20.5h7M9.5 17h5v3.5h-5z"/>',
     bolt: '<path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/>',
     plane: '<path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0v5l-8 5v2l8-2.5v5l-2 1.5V21l3.5-1 3.5 1v-1.5l-2-1.5v-5z"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
     grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
   };
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ""}</svg>`;
@@ -822,7 +823,84 @@ let route = function route() {
   if (m) return renderEvent(m[1]);
   const c = location.pathname.match(/^\/created\/([A-Za-z0-9]{6,16})\/?$/);
   if (c) return renderCreated(c[1]);
-  return renderHome();
+  const mt = location.pathname.match(/^\/m\/([A-Za-z0-9]{6,16})\/?$/);
+  if (mt) return meetModule().then((x) => x.renderMeeting(mt[1]));
+  if (/^\/meet\/?$/.test(location.pathname)) return meetModule().then((x) => x.renderMeetCreate());
+  if (/^\/plan\/?$/.test(location.pathname)) return renderHome();
+  return renderHub();
+}
+
+/* Meeting times live in their own module, loaded the first time they're needed. */
+let meetPromise = null;
+function meetModule() {
+  app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  meetPromise ||= import("/meet.js?v=" + ((document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1] || "1")).then((m) => {
+    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate });
+    return m;
+  });
+  return meetPromise.catch((err) => {
+    meetPromise = null;
+    app.innerHTML = `<div class="empty card" style="margin-top:2.5rem"><h3>Couldn’t load this page</h3><p>Check your connection and try again.</p></div>`;
+    throw err;
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Hub: Wingman Tools                                                  */
+/* ------------------------------------------------------------------ */
+
+function renderHub() {
+  document.title = "Wingman Tools";
+  const heat = Array.from({ length: 35 }, (_, i) => {
+    const a = [0.08, 0.15, 0.3, 0.55, 0.85, 1][Math.floor(Math.abs(Math.sin(i * 1.7 + 0.4)) * 6)];
+    return `<span style="--a:${a};--d:${(i % 7) * 0.18}s"></span>`;
+  }).join("");
+  const grid = Array.from({ length: 5 * 8 }, (_, i) => {
+    const c = i % 5;
+    const r = Math.floor(i / 5);
+    const a = Math.max(0.06, Math.min(1, Math.sin((r + 1) * 0.55) * Math.cos((c - 2) * 0.6) * 1.15));
+    return `<span style="--a:${a.toFixed(2)};--d:${((r + c) % 6) * 0.2}s"></span>`;
+  }).join("");
+  const recent = [
+    ...store.get("convene:events", []).map((e) => ({ href: `/e/${e.id}`, title: e.title, ico: "calendar", sub: e.start ? fmtRange(e.start, e.end) : e.year || "Trip days" })),
+    ...store.get("wingman:meets", []).map((m) => ({ href: `/m/${m.id}`, title: m.title, ico: "clock", sub: m.kind === "week" ? "Weekly times" : "Meeting times" })),
+  ].slice(0, 10);
+  app.innerHTML = `
+    <section class="hub-hero">
+      <p class="eyebrow fade-in">${icon("plane")} Wingman Tools</p>
+      <h1 class="hub-title fade-in d1">Plan it together.<br/><span class="shine">No accounts.</span></h1>
+      <p class="subtitle fade-in d1">Two tools for getting a group to agree. Create one, share the link, and watch the answers come in.</p>
+    </section>
+    <div class="hub-tools">
+      <a class="tool-card card faceplate fade-in d2" href="/plan" data-link>
+        <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
+        <span class="shot-tag">01 · Trip days</span>
+        <div class="tool-preview"><div class="mini-heat cal" aria-hidden="true">${heat}</div></div>
+        <h2>Find the days</h2>
+        <p>Mark the days you can travel over months, then vote on where to go and what to do.</p>
+        <span class="btn btn-primary btn-block">${icon("calendar")} Plan a trip</span>
+      </a>
+      <a class="tool-card card faceplate fade-in d2" href="/meet" data-link>
+        <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
+        <span class="shot-tag">02 · Meeting times</span>
+        <div class="tool-preview"><div class="mini-heat times" aria-hidden="true">${grid}</div></div>
+        <h2>Find the hour</h2>
+        <p>Drag across the 15-minute slots you’re free, on dates or weekdays, in any time zone.</p>
+        <span class="btn btn-primary btn-block">${icon("clock")} Schedule a meeting</span>
+      </a>
+    </div>
+    ${
+      recent.length
+        ? `<div class="section-header">Your recent</div>
+           <div class="card group">${recent
+             .map(
+               (e) =>
+                 `<a class="row" href="${esc(e.href)}" data-link style="text-decoration:none;color:inherit"><span class="feature-icon" style="width:30px;height:30px">${icon(e.ico)}</span><span style="flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.title)}</span><span style="color:var(--label-3);font-size:0.8125rem">${esc(e.sub)}</span></a>`,
+             )
+             .join("")}</div>`
+        : ""
+    }
+    <p class="fineprint hub-fine">${icon("lock")}<span>Nothing to sign up for. Events are deleted a month after their last date, or after two months nobody opens them.</span></p>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1054,7 +1132,7 @@ async function renderEvent(id, { keepTab = false, quiet = false } = {}) {
     if (cached) return toast("Can’t reach the server — showing your saved copy", { error: true });
     app.innerHTML = `<div class="empty card" style="margin-top:2.5rem"><div class="glyph">${icon("calendar")}</div><h3>Event not found</h3><p>${esc(
       err.message,
-    )}</p><a class="btn btn-primary" href="/" data-link style="margin-top:0.75rem">Create a new event</a></div>`;
+    )}</p><a class="btn btn-primary" href="/plan" data-link style="margin-top:0.75rem">Create a new event</a></div>`;
     return;
   }
   cacheEvent(id, data);

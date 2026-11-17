@@ -1,6 +1,9 @@
-# Wingman
+# Wingman Tools
 
-A EUROAVIA no-login group planner for phone, tablet and desktop. It works like When2meet or Lettucemeet, and adds destination voting and activity ideas.
+A EUROAVIA no-login group planner for phone, tablet and desktop. The home page (`/`) is **Wingman Tools**, where you pick one of two tools:
+
+- **Trip days** (`/plan`): works like Lettucemeet, with destination voting and activity ideas. Described below.
+- **Meeting times** (`/meet`): works like When2meet. Described in [Meeting times](#meeting-times).
 
 1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
 2. **Share the link.** Each person goes through a short animated flow:
@@ -17,6 +20,26 @@ A EUROAVIA no-login group planner for phone, tablet and desktop. It works like W
    - **Activities:** ideas grouped by destination, with links and likes.
 
 People can edit their own response later from the same device. The device keeps a private token for this. There are no accounts.
+
+## Meeting times
+
+Works like When2meet:
+
+1. **Create** (`/meet`).
+   - Name the meeting.
+   - Choose **Specific dates** (click or drag on a calendar, up to 60) or **Days of the week**.
+   - Pick a window (**No earlier than** / **No later than**, on the hour) and, for dates, a time zone.
+2. **Sign in** on the meeting page (`/m/:id`) with a name and an optional password. Both are only for this meeting. To come back from another device, use the same name and password.
+3. **Mark your availability.** Press on a 15-minute slot and drag a rectangle. Every slot in it flips to the opposite of the slot you started on. Changes are saved as soon as you let go.
+4. **Group's availability.**
+   - Each slot is shaded by how many people are free.
+   - Hover over (or tap) a slot to see who's available and who isn't.
+   - "Best time so far" shows the longest stretch with the most people.
+   - Date meetings can be shown in any time zone. Weekday meetings aren't tied to a time zone.
+
+On a desktop the two grids sit side by side. On a phone you switch between **Your availability** and **Group** and page through the days.
+
+Meetings follow the same retention as events. A date meeting is deleted a month after its last date. Any meeting is deleted after two months with no visits.
 
 ## Performance: full effects and smooth mode
 
@@ -129,5 +152,12 @@ The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman
 | `GET` | `/api/events/:id` | → `{ event, responses[] }` |
 | `POST` | `/api/events/:id/responses` | `{ name, yes[], maybe[], destinations[], activities[], likes[] }` → `{ id, token }` |
 | `PUT` | `/api/events/:id/responses/:rid` | same as above + `token` |
+
+| `POST` | `/api/meetings` | `{ title, kind: "dates"\|"week", dates[]\|days[], start_min, end_min, tz }` → `{ id }` |
+| `GET` | `/api/meetings/:id` | → `{ meeting, people[] }` |
+| `POST` | `/api/meetings/:id/signin` | `{ name, password? }` → `{ id, token, name, slots[] }` |
+| `PUT` | `/api/meetings/:id/people/:pid` | `{ token, slots[] }` |
+
+Meeting slots are 15 minutes long. A date meeting stores each slot as an absolute instant (`t` + UTC epoch minutes), so every viewer can convert it to their own time zone. A weekday meeting stores `w<day>:<minute>`. Passwords are hashed with PBKDF2.
 
 Dates are `YYYY-MM-DD` strings. All input is sanitised on the server: lengths are capped, dates must fall inside the event's range, and links must be http(s). The worker creates and upgrades its own tables on first use, so a new D1 database needs no setup.
