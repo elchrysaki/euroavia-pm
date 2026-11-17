@@ -853,7 +853,7 @@ let meetPromise = null;
 function meetModule() {
   app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   meetPromise ||= import("/meet.js?v=" + ((document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1] || "1")).then((m) => {
-    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate });
+    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion });
     return m;
   });
   return meetPromise.catch((err) => {
@@ -992,7 +992,7 @@ function renderHub() {
         <span class="shot-tag">02 · Meeting times</span>
         <div class="tool-preview"><div class="mini-heat times" aria-hidden="true">${grid}</div></div>
         <h2>Find the hour</h2>
-        <p>Drag across the 15-minute slots you’re free, on dates or weekdays, in any time zone.</p>
+        <p>Pick dates up to 3 months ahead, then everyone drags across the 15-minute slots they’re free, in their own time zone.</p>
         <span class="btn btn-primary btn-block">${icon("clock")} Schedule a meeting</span>
       </a>
     </div>

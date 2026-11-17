@@ -1530,3 +1530,47 @@ body:has(.flow) .tabbar, body:has(.sheet-wrap) .tabbar, body:has(.dp-wrap) .tabb
 .dash-new { margin-top: var(--sp-6); }
 @media (max-width: 719px) { .dash-new { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .dash-card { transition: none; } }
+
+/* ---- Meeting create: scrolling 4-week calendar (3 months max) + details step ---- */
+.mc-steps { display: flex; gap: var(--sp-4); font-size: 0.75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--label-3); margin-bottom: var(--sp-4); }
+.mc-steps .on { color: var(--accent); text-shadow: var(--engrave); }
+.mc-quick { margin-bottom: var(--sp-4); }
+.mc-quick .btn { min-height: 2.25rem; padding: 0.375rem 0.875rem; font-size: 0.875rem; }
+.mc-cal { border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3) 0; background: linear-gradient(180deg, var(--well-a), var(--well-b)); box-shadow: var(--sh-well); }
+.mc-weekrow { display: grid; grid-template-columns: 1.75rem repeat(7, minmax(0, 1fr)); gap: 0.3125rem; margin-bottom: 0.3125rem; }
+.mc-head { margin: 0; padding-bottom: var(--sp-1); border-bottom: 0.5px solid var(--separator); }
+.mc-head span { text-align: center; font-size: 0.75rem; font-weight: 600; color: var(--label-3); text-shadow: var(--engrave); }
+.mc-scroll { position: relative; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y proximity; padding: var(--sp-1) 0 var(--sp-2); touch-action: pan-y; scrollbar-width: thin; user-select: none; -webkit-user-select: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 1.25rem), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 1.25rem), transparent); }
+.mc-monthrow { display: flex; align-items: baseline; justify-content: space-between; padding: var(--sp-3) 0.125rem var(--sp-2) 2.0625rem; scroll-snap-align: start; }
+.mc-monthrow:first-child { padding-top: var(--sp-1); }
+.mc-monthrow h3 { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
+.mc-monthrow .btn-link { font-size: 0.875rem; }
+.mc-scroll .day { font-size: 0.875rem; }
+.mc-scroll .day.first { font-size: 0.6875rem; font-weight: 700; color: var(--accent); }
+.mc-scroll .day.first.yes { color: #fff; }
+.mc-scroll .day.yes { color: #fff; }
+.wk-handle { border: 0; padding: 0; background: none; color: var(--label-3); border-radius: 8px; display: grid; place-items: center; cursor: pointer; }
+.wk-handle svg { width: 16px; height: 16px; }
+.wk-handle:hover { color: var(--accent); background: var(--fill); }
+.wk-handle:disabled { visibility: hidden; }
+.mc-cta { position: sticky; bottom: calc(var(--sp-3) + var(--safe-b)); z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-4); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border-radius: 999px; background: var(--glass); box-shadow: var(--glass-shadow); border: 0.5px solid var(--glass-border); }
+@media (max-width: 719px) { .mc-cta { bottom: calc(4.75rem + var(--safe-b)); } }
+.mc-cta > span { font-size: 0.875rem; color: var(--label-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-cta > span b { color: var(--label); }
+.mc-cta .btn { flex: none; }
+.mc-cta .btn svg { width: 16px; height: 16px; }
+.mc-back { display: inline-block; margin-bottom: var(--sp-2); }
+.meet-create textarea { min-height: 3.5rem; }
+.meet-desc { margin: 0 0 var(--sp-2); font-size: 1.0625rem; line-height: 1.45; color: var(--label); max-width: 60ch; }
+@media (max-width: 400px) { .mc-arrow-hint { display: none; } }
+.mc-scroll .day { aspect-ratio: auto; height: 2.75rem; }
+@media (max-width: 719px) { .mc-scroll .day { height: auto; aspect-ratio: 1; } }
+.mc-scroll .day.ranging { box-shadow: 0 0 0 2px var(--accent); }
+@media (max-width: 719px) {
+  .mc-quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--sp-5)) var(--sp-4); padding: 2px var(--sp-5) var(--sp-1); scroll-padding: var(--sp-5); }
+  .mc-quick::-webkit-scrollbar { display: none; }
+  .mc-quick .btn { flex: none; }
+}
+.mc-cta, .mc-cta { position: static; }
+#mcSummary { margin-bottom: var(--sp-4); }

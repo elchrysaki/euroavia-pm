@@ -1,7 +1,9 @@
 // Wingman — Meeting times (works like When2meet), loaded on demand from app.js.
 //
-// Create: a name, specific dates (click or drag on a calendar) or days of the week, a time window
-// ("No earlier than" / "No later than") and a time zone.
+// Create, in two steps (like When2meet / LettuceMeet):
+//   1. Dates: a calendar that opens on the next 4 weeks and scrolls up to 3 months ahead. Tap a day,
+//      drag across many, select a whole week (›) or month, or use the quick picks.
+//   2. Details: name, what it's about, "No earlier than" / "No later than" and the time zone.
 // Meeting page: sign in with a name (+ optional password, only for this meeting), then click and drag
 // rectangles on a 15-minute grid to toggle when you're free; every change is saved immediately.
 // The group grid shades each slot by how many people are free; hover (or tap) a slot to see who.
@@ -56,10 +58,16 @@ function zoned(ms, tz) {
 /* ------------------------------------------------------------------ */
 
 export function renderMeetCreate() {
-  const { app, $, $$, esc, icon, api, toast, setupSegmented, todayStr, parseDate, ymd, MONTHS, navigate } = K;
-  document.title = "Find a time — Wingman";
+  const { app, $, $$, esc, icon, api, toast, todayStr, parseDate, ymd, MONTHS, navigate } = K;
+  document.title = "Let’s meet — Wingman";
   const today = todayStr();
-  const st = { kind: "dates", yes: new Set(), maybe: new Set(), mode: "yes", days: new Set([1, 2, 3, 4, 5]), month: today.slice(0, 7) };
+  const t0 = parseDate(today);
+  // the calendar runs from this week's Monday to 3 months from today
+  const lastDate = (() => {
+    const d = new Date(t0.getFullYear(), t0.getMonth() + 3, t0.getDate());
+    return ymd(d.getFullYear(), d.getMonth(), d.getDate());
+  })();
+  const st = { yes: new Set(), maybe: new Set(), mode: "yes" };
   const tzs = allTimeZones();
   const here = viewerTz();
   const hourOpts = (from, to, sel) =>
@@ -67,105 +75,170 @@ export function renderMeetCreate() {
       .map((h) => `<option value="${h * 60}" ${h * 60 === sel ? "selected" : ""}>${esc(timeLabel(h * 60))}${h === 24 ? " (midnight)" : ""}</option>`)
       .join("");
 
+  // weeks: Monday-first rows; a month label before the first week and before each week holding a 1st
+  const start = new Date(t0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const weeks = [];
+  for (let d = new Date(start); ymd(d.getFullYear(), d.getMonth(), d.getDate()) <= lastDate; ) {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(ymd(d.getFullYear(), d.getMonth(), d.getDate()));
+      d.setDate(d.getDate() + 1);
+    }
+    weeks.push(days);
+  }
+  const open = (date) => date >= today && date <= lastDate;
+  const monthKey = (date) => date.slice(0, 7);
+  const monthName = (key) => `${MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+  let rows = "";
+  weeks.forEach((days, w) => {
+    const firstOpen = days.find(open) || days[0];
+    const newMonth = w === 0 ? monthKey(firstOpen) : days.find((x) => x.endsWith("-01") && open(x)) && monthKey(days.find((x) => x.endsWith("-01")));
+    if (newMonth)
+      rows += `<div class="mc-monthrow"><h3>${esc(monthName(newMonth))}</h3><button type="button" class="btn-link" data-selmonth="${newMonth}">Select month</button></div>`;
+    rows += `<div class="mc-weekrow"><button type="button" class="wk-handle" data-week="${w}" aria-label="Select the week of ${esc(fmtShort(days[0]))}" ${days.some(open) ? "" : "disabled"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>${days
+      .map((date) => {
+        const ok = open(date);
+        const n = Number(date.slice(8));
+        const label = n === 1 ? `${MONTHS[Number(date.slice(5, 7)) - 1].slice(0, 3)} 1` : n;
+        return `<button type="button" class="day${ok ? "" : " past"}${date === today ? " today" : ""}${n === 1 ? " first" : ""}" data-date="${date}" ${ok ? "" : "disabled"} aria-label="${esc(fmtShort(date))}">${label}</button>`;
+      })
+      .join("")}</div>`;
+  });
+
   app.innerHTML = `
     <div class="meet-create">
       <div class="fade-in">
-        <div class="pass-row"><span class="pass-airline">${icon("clock")} Meeting times</span><a class="pass-code" href="/" data-link>Wingman Tools</a></div>
-        <h1 class="large-title">Find the hour<br/><span class="shine">that works.</span></h1>
-        <p class="subtitle">Pick the dates or weekdays and a time window. Everyone drags across the hours they’re free, and the overlap lights up.</p>
+        <div class="pass-row"><span class="pass-airline">${icon("clock")} Meeting times</span><a class="pass-code" href="/new" data-link>Wingman Tools</a></div>
+        <h1 class="large-title">Let’s <span class="shine">meet.</span></h1>
+        <p class="subtitle" id="mcLede">Pick the days that could work. Tap a day, drag across several, or select a whole week or month.</p>
       </div>
-      <form class="card pad faceplate fade-in d1" id="meetForm" autocomplete="off">
+
+      <section class="card pad faceplate fade-in d1" id="step1">
         <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
-        <div class="section-header">New meeting</div>
-        <div class="group well"><div class="row"><label for="mTitle">Name</label><input id="mTitle" name="title" maxlength="80" placeholder="IT WG weekly sync" required /></div></div>
-        <div class="section-header">Survey using</div>
-        <div class="segmented" data-seg="kind" role="group" aria-label="Survey using">
-          <span class="thumb"></span>
-          <button type="button" data-value="dates" aria-pressed="true">Specific dates</button>
-          <button type="button" data-value="week" aria-pressed="false">Days of the week</button>
+        <div class="mc-steps" aria-hidden="true"><span class="on">1 · Dates</span><span>2 · Details</span></div>
+        <div class="chips mc-quick">
+          <button type="button" class="btn btn-tinted" data-quick="7">Next 7 days</button>
+          <button type="button" class="btn btn-tinted" data-quick="14">Next 2 weeks</button>
+          <button type="button" class="btn btn-tinted" data-quick="28">Next 4 weeks</button>
+          <button type="button" class="btn btn-tinted" data-quick="wd">Weekdays only</button>
+          <button type="button" class="btn btn-tinted" data-quick="clear">Clear</button>
         </div>
-        <div id="kindDates" class="mc-dates">
-          <div class="mc-month">
-            <div class="mc-month-head">
-              <button type="button" class="btn btn-icon" data-month="-1" aria-label="Previous month">‹</button>
-              <h3 id="mcMonthTitle"></h3>
-              <button type="button" class="btn btn-icon" data-month="1" aria-label="Next month">›</button>
-            </div>
-            <div class="weekdays">${["M", "T", "W", "T", "F", "S", "S"].map((d) => `<span>${d}</span>`).join("")}</div>
-            <div class="days picker" id="mcDays"></div>
-          </div>
-          <p class="picker-hint">Click or drag to choose dates. Selected: <b id="mcCount">0</b></p>
+        <div class="mc-cal">
+          <div class="mc-weekrow mc-head"><span></span>${["M", "T", "W", "T", "F", "S", "S"].map((d) => `<span>${d}</span>`).join("")}</div>
+          <div class="mc-scroll picker" id="mcScroll">${rows}</div>
         </div>
-        <div id="kindWeek" class="mc-week" hidden>
-          <div class="chips" id="mcWeekdays">${DOW_MON_FIRST.map((d) => `<button type="button" class="chip" data-dow="${d}" aria-pressed="${st.days.has(d)}">${DOW_SHORT[d]}</button>`).join("")}</div>
+        <p class="picker-hint">Drag to select many days. On a touch screen, hold a day, then drag. <span class="mc-arrow-hint">Tap ${`<b>›</b>`} to select a whole week.</span></p>
+        <div class="mc-cta">
+          <span id="mcSel">No dates selected</span>
+          <button type="button" class="btn btn-primary" id="mcNext" disabled>Let’s meet ${icon("arrow")}</button>
         </div>
-        <div class="section-header">Times that might work</div>
+      </section>
+
+      <form class="card pad faceplate" id="step2" autocomplete="off" hidden>
+        <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
+        <div class="mc-steps" aria-hidden="true"><span>1 · Dates</span><span class="on">2 · Details</span></div>
+        <button type="button" class="btn-link mc-back" id="mcBack">‹ Change dates</button>
+        <p class="range-summary" id="mcDatesSummary"></p>
+        <div class="section-header">About the meeting</div>
+        <div class="group well">
+          <div class="row"><label for="mTitle">Name</label><input id="mTitle" maxlength="80" placeholder="IT WG weekly sync" required /></div>
+          <div class="row"><label for="mDesc">What’s it about</label><textarea id="mDesc" maxlength="400" placeholder="Optional"></textarea></div>
+        </div>
+        <div class="section-header">Hours</div>
         <div class="group well">
           <div class="row"><label for="mStart">No earlier than</label><select id="mStart" class="time-select">${hourOpts(0, 23, 540)}</select></div>
           <div class="row"><label for="mEnd">No later than</label><select id="mEnd" class="time-select">${hourOpts(1, 24, 1020)}</select></div>
-          <div class="row" id="tzRow"><label for="mTz">Time zone</label><select id="mTz" class="time-select">${tzs.map((z) => `<option ${z === here ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></div>
+          <div class="row"><label for="mTz">Time zone</label><select id="mTz" class="time-select">${tzs.map((z) => `<option ${z === here ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></div>
         </div>
+        <p class="fineprint">${icon("clock")}<span>These hours are in the time zone above. Everyone who opens the link sees the times converted to their own time zone, and can switch to another one.</span></p>
         <p class="range-summary" id="mcSummary"></p>
-        <button class="btn btn-primary btn-block" type="submit" id="mcCreate">${icon("clock")} Create meeting</button>
+        <button class="btn btn-primary btn-block" type="submit" id="mcCreate">${icon("check")} Create meeting</button>
       </form>
     </div>`;
 
-  const daysEl = $("#mcDays");
-  const renderMonth = () => {
-    const [y, m] = st.month.split("-").map(Number);
-    $("#mcMonthTitle").textContent = `${MONTHS[m - 1]} ${y}`;
-    const first = new Date(y, m - 1, 1);
-    const offset = (first.getDay() + 6) % 7;
-    const n = new Date(y, m, 0).getDate();
-    let html = "";
-    for (let i = 0; i < offset; i++) html += '<span class="day blank"></span>';
-    for (let d = 1; d <= n; d++) {
-      const date = ymd(y, m - 1, d);
-      const past = date < today;
-      html += `<button type="button" class="day${past ? " past" : ""}${date === today ? " today" : ""}${st.yes.has(date) ? " yes" : ""}" data-date="${date}" ${past ? "disabled" : ""}>${d}</button>`;
-    }
-    daysEl.innerHTML = html;
-    $('[data-month="-1"]').disabled = st.month <= today.slice(0, 7);
+  const scroller = $("#mcScroll");
+  const allDays = () => $$(".day[data-date]:not([disabled])", scroller);
+  const sync = () => {
+    allDays().forEach((el) => el.classList.toggle("yes", st.yes.has(el.dataset.date)));
+    changed();
   };
+  const changed = () => {
+    const n = st.yes.size;
+    const sorted = [...st.yes].sort();
+    $("#mcSel").innerHTML = n ? `<b>${n}</b> ${n === 1 ? "date" : "dates"} · ${esc(fmtShort(sorted[0]))}${n > 1 ? ` – ${esc(fmtShort(sorted[n - 1]))}` : ""}` : "No dates selected";
+    $("#mcNext").disabled = !n;
+  };
+  // toggle a group: if every open day in it is selected, clear them; otherwise select them all
+  const toggleGroup = (dates) => {
+    const ok = dates.filter(open);
+    const all = ok.length && ok.every((d) => st.yes.has(d));
+    ok.forEach((d) => (all ? st.yes.delete(d) : st.yes.add(d)));
+    sync();
+    K.buzz?.(8);
+  };
+  attachRangeDrag(scroller, st, open, sync);
+  scroller.addEventListener("click", (e) => {
+    const h = e.target.closest("[data-week]");
+    if (h) toggleGroup(weeks[Number(h.dataset.week)]);
+    const m = e.target.closest("[data-selmonth]");
+    if (m) toggleGroup(weeks.flat().filter((d) => monthKey(d) === m.dataset.selmonth));
+  });
+  $$("[data-quick]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const q = b.dataset.quick;
+      if (q === "clear") {
+        st.yes.clear();
+        return sync();
+      }
+      if (q === "wd") {
+        // keep only Monday–Friday from what's selected; with nothing selected, pick weekdays of the next 4 weeks
+        const base = st.yes.size ? [...st.yes] : weeks.flat().filter(open).slice(0, 28);
+        st.yes = new Set(base.filter((d) => parseDate(d).getDay() % 6 !== 0));
+        return sync();
+      }
+      st.yes = new Set(weeks.flat().filter(open).slice(0, Number(q)));
+      sync();
+    }),
+  );
+
+  // show four weeks at a time; the rest scrolls
+  const fit = () => {
+    const wk = $$(".mc-weekrow", scroller);
+    if (wk.length < 4) return;
+    const end = wk[3].offsetTop + wk[3].offsetHeight;
+    scroller.style.maxHeight = `${end + 2}px`;
+  };
+  requestAnimationFrame(fit);
+  new ResizeObserver(fit).observe(scroller);
+
+  const toStep = (n) => {
+    $("#step1").hidden = n !== 1;
+    $("#step2").hidden = n !== 2;
+    $("#step2").classList.toggle("fade-in", n === 2);
+    $("#mcLede").textContent =
+      n === 1 ? "Pick the days that could work. Tap a day, drag across several, or select a whole week or month." : "Name it, say what it’s about, and set the hours.";
+    window.scrollTo({ top: 0, behavior: K.reducedMotion?.() ? "auto" : "smooth" });
+    if (n === 2) {
+      const sorted = [...st.yes].sort();
+      $("#mcDatesSummary").innerHTML = `${icon("calendar")}<span><b>${sorted.length} ${sorted.length === 1 ? "date" : "dates"}</b> · ${esc(fmtShort(sorted[0]))}${sorted.length > 1 ? ` – ${esc(fmtShort(sorted[sorted.length - 1]))}` : ""}</span>`;
+      setTimeout(() => $("#mTitle").focus({ preventScroll: true }), 50);
+      summary();
+    }
+  };
+  $("#mcNext").addEventListener("click", () => toStep(2));
+  $("#mcBack").addEventListener("click", () => toStep(1));
+
   const summary = () => {
     const s = Number($("#mStart").value);
     const e = Number($("#mEnd").value);
-    const what = st.kind === "dates" ? `${st.yes.size} ${st.yes.size === 1 ? "date" : "dates"}` : [...st.days].sort((a, b) => DOW_MON_FIRST.indexOf(a) - DOW_MON_FIRST.indexOf(b)).map((d) => DOW_SHORT[d]).join(", ") || "No days";
-    const ok = e > s && (st.kind === "dates" ? st.yes.size > 0 : st.days.size > 0);
     $("#mcSummary").classList.toggle("error", e <= s);
-    $("#mcSummary").innerHTML = `${icon("clock")}<span>${e <= s ? "“No later than” must be after “No earlier than”." : `<b>${esc(what)}</b> · ${esc(timeLabel(s))}–${esc(timeLabel(e))}${st.kind === "dates" ? ` · ${esc($("#mTz").value)}` : ""}`}</span>`;
-    $("#mcCount").textContent = st.yes.size;
-    $("#mcCreate").disabled = !ok;
+    $("#mcSummary").innerHTML = `${icon("clock")}<span>${e <= s ? "“No later than” must be after “No earlier than”." : `<b>${esc(timeLabel(s))}–${esc(timeLabel(e))}</b> · ${esc($("#mTz").value)}`}</span>`;
+    $("#mcCreate").disabled = e <= s;
   };
-  renderMonth();
-  K.attachPainter(daysEl, st, summary); // click to toggle, drag (or hold & drag on touch) to paint
-  $$("[data-month]").forEach((b) =>
-    b.addEventListener("click", () => {
-      const [y, m] = st.month.split("-").map(Number);
-      const d = new Date(y, m - 1 + Number(b.dataset.month), 1);
-      st.month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      renderMonth();
-    }),
-  );
-  setupSegmented($('[data-seg="kind"]'), (v) => {
-    st.kind = v;
-    $("#kindDates").hidden = v !== "dates";
-    $("#kindWeek").hidden = v !== "week";
-    $("#tzRow").hidden = v !== "dates"; // weekday meetings aren't tied to a time zone
-    summary();
-  });
-  $("#mcWeekdays").addEventListener("click", (e) => {
-    const c = e.target.closest("[data-dow]");
-    if (!c) return;
-    const d = Number(c.dataset.dow);
-    st.days.has(d) ? st.days.delete(d) : st.days.add(d);
-    c.setAttribute("aria-pressed", String(st.days.has(d)));
-    summary();
-  });
   ["mStart", "mEnd", "mTz"].forEach((id) => $(`#${id}`).addEventListener("change", summary));
-  summary();
 
-  $("#meetForm").addEventListener("submit", async (e) => {
+  $("#step2").addEventListener("submit", async (e) => {
     e.preventDefault();
     const title = $("#mTitle").value.trim();
     if (!title) {
@@ -174,9 +247,9 @@ export function renderMeetCreate() {
     }
     const body = {
       title,
-      kind: st.kind,
-      dates: [...st.yes],
-      days: [...st.days],
+      description: $("#mDesc").value.trim(),
+      kind: "dates",
+      dates: [...st.yes].sort(),
       start_min: Number($("#mStart").value),
       end_min: Number($("#mEnd").value),
       tz: $("#mTz").value,
@@ -185,7 +258,7 @@ export function renderMeetCreate() {
     try {
       const { id } = await api("/meetings", { method: "POST", body });
       const list = store.get("wingman:meets", []).filter((x) => x.id !== id);
-      list.unshift({ id, title, kind: st.kind });
+      list.unshift({ id, title, kind: "dates" });
       store.set("wingman:meets", list.slice(0, 20));
       navigate(`/m/${id}`);
       K.buzz([15, 60, 15]);
@@ -195,6 +268,119 @@ export function renderMeetCreate() {
     }
   });
 }
+
+/* Tap a day to toggle it. Press and drag (on touch: hold, then drag) to select EVERY date between the
+   day you started on and the one under your finger, across weeks and months; the calendar scrolls
+   when you drag near its top or bottom edge. Starting on a selected day removes the range instead. */
+function attachRangeDrag(root, st, open, sync) {
+  let drag = null;
+  let hold = null;
+  let start = null;
+  let scrollRaf = 0;
+  const cellAt = (x, y) => {
+    const c = document.elementFromPoint(x, y)?.closest?.(".day[data-date]");
+    return c && !c.disabled && root.contains(c) ? c : null;
+  };
+  const between = (a, b) => {
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    return [...root.querySelectorAll(".day[data-date]")].map((el) => el.dataset.date).filter((d) => d >= lo && d <= hi && open(d));
+  };
+  const paint = (to) => {
+    const range = new Set(between(drag.from, to));
+    st.yes = new Set(drag.before);
+    range.forEach((d) => (drag.add ? st.yes.add(d) : st.yes.delete(d)));
+    root.querySelectorAll(".day[data-date]").forEach((el) => el.classList.toggle("ranging", range.has(el.dataset.date)));
+    sync();
+  };
+  const begin = (cell) => {
+    drag = { from: cell.dataset.date, add: !st.yes.has(cell.dataset.date), before: new Set(st.yes), last: cell.dataset.date, y: 0 };
+    paint(drag.from);
+  };
+  const autoscroll = () => {
+    cancelAnimationFrame(scrollRaf);
+    if (!drag) return;
+    const r = root.getBoundingClientRect();
+    const edge = 36;
+    const dy = drag.y < r.top + edge ? -8 : drag.y > r.bottom - edge ? 8 : 0;
+    if (dy) {
+      root.scrollTop += dy;
+      const c = cellAt(drag.x, Math.min(Math.max(drag.y, r.top + 4), r.bottom - 4));
+      if (c && c.dataset.date !== drag.last) {
+        drag.last = c.dataset.date;
+        paint(drag.last);
+      }
+      scrollRaf = requestAnimationFrame(autoscroll);
+    }
+  };
+  const move = (x, y) => {
+    if (!drag) return;
+    drag.x = x;
+    drag.y = y;
+    const c = cellAt(x, y);
+    if (c && c.dataset.date !== drag.last) {
+      drag.last = c.dataset.date;
+      paint(drag.last);
+    }
+    autoscroll();
+  };
+  const finish = () => {
+    clearTimeout(hold);
+    hold = null;
+    cancelAnimationFrame(scrollRaf);
+    root.querySelectorAll(".ranging").forEach((el) => el.classList.remove("ranging"));
+    drag = null;
+    start = null;
+  };
+  root.addEventListener("contextmenu", (e) => e.preventDefault());
+  root.addEventListener("pointerdown", (e) => {
+    const cell = e.target.closest(".day[data-date]");
+    if (!cell || cell.disabled) return;
+    start = { x: e.clientX, y: e.clientY, cell, type: e.pointerType };
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      e.preventDefault();
+      begin(cell);
+    } else {
+      hold = setTimeout(() => {
+        hold = null;
+        begin(cell);
+        navigator.vibrate?.(8);
+      }, 260);
+    }
+  });
+  root.addEventListener("pointermove", (e) => {
+    if (!drag && hold && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) {
+      clearTimeout(hold); // moved before the hold: it's a scroll
+      hold = null;
+      start = null;
+    }
+    if (drag && start?.type !== "touch") move(e.clientX, e.clientY);
+  });
+  window.addEventListener("pointerup", (e) => {
+    if (start && hold && e.type === "pointerup") {
+      // a quick tap on touch: toggle that one day
+      clearTimeout(hold);
+      hold = null;
+      const d = start.cell.dataset.date;
+      st.yes.has(d) ? st.yes.delete(d) : st.yes.add(d);
+      sync();
+    }
+    finish();
+  });
+  root.addEventListener("pointercancel", () => !drag && finish());
+  root.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!drag) return;
+      e.preventDefault(); // selecting, not scrolling
+      const t = e.touches[0];
+      if (t) move(t.clientX, t.clientY);
+    },
+    { passive: false },
+  );
+  root.addEventListener("touchend", finish);
+}
+
+const fmtShort = (date) => K.parseDate(date).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 
 /* ------------------------------------------------------------------ */
 /* Meeting page                                                        */
@@ -299,6 +485,7 @@ function paint() {
       <header class="meet-head pass-card fade-in">
         <div class="pass-row"><span class="pass-airline">${icon("clock")} Meeting times</span><span class="pass-code">WM-${esc(meeting.id.slice(0, 4).toUpperCase())}</span></div>
         <h1 class="large-title">${esc(meeting.title)}</h1>
+        ${meeting.description ? `<p class="meet-desc">${esc(meeting.description)}</p>` : ""}
         <p class="subtitle">${esc(what)} · ${esc(window_)}${meeting.kind === "dates" ? ` · created in ${esc(meeting.tz)}` : ""}</p>
         ${
           meeting.kind === "dates"

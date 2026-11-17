@@ -32,17 +32,16 @@ People can edit their own response later from the same device. The device keeps 
 
 Works like When2meet:
 
-1. **Create** (`/meet`).
-   - Name the meeting.
-   - Choose **Specific dates** (click or drag on a calendar, up to 60) or **Days of the week**.
-   - Pick a window (**No earlier than** / **No later than**, on the hour) and, for dates, a time zone.
+1. **Create** (`/meet`), in two steps:
+   - **Dates.** The calendar opens on the next 4 weeks and scrolls up to 3 months ahead. Tap a day, or press and drag to select every date between where you start and where you let go (on a touch screen, hold a day first). The **›** next to a week selects that week, **Select month** selects a month, and quick picks cover the next 7 days, 2 weeks or 4 weeks, weekdays only, or clear. Then press **Let’s meet**.
+   - **Details.** The name, what it’s about, **No earlier than** / **No later than**, and the time zone those hours are in.
 2. **Sign in** on the meeting page (`/m/:id`) with a name and an optional password. Both are only for this meeting. To come back from another device, use the same name and password.
 3. **Mark your availability.** Press on a 15-minute slot and drag a rectangle. Every slot in it flips to the opposite of the slot you started on. Changes are saved as soon as you let go.
 4. **Group's availability.**
    - Each slot is shaded by how many people are free.
    - Hover over (or tap) a slot to see who's available and who isn't.
    - "Best time so far" shows the longest stretch with the most people.
-   - Date meetings can be shown in any time zone. Weekday meetings aren't tied to a time zone.
+   - Every viewer sees the times converted to their own time zone, and can switch to any other.
 
 On a desktop the two grids sit side by side. On a phone you switch between **Your availability** and **Group** and page through the days.
 

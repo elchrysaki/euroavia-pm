@@ -12,7 +12,8 @@ const DAY = 86_400_000;
 const AFTER_END_MS = 30 * DAY; // dates mode: deleted one month after the last date
 const IDLE_MS = 60 * DAY; // any mode: deleted after two months without visits
 const TOUCH_EVERY_MS = 60 * 60 * 1000;
-const MAX_DATES = 60;
+const MAX_DATES = 100; // up to ~3 months ahead, like the create calendar
+const MAX_AHEAD_DAYS = 95;
 const MAX_PEOPLE = 200;
 const ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -67,7 +68,10 @@ export function ensureMeetSchema(env) {
       "CREATE TABLE IF NOT EXISTS meet_people (id TEXT PRIMARY KEY, meeting_id TEXT NOT NULL, name TEXT NOT NULL, name_key TEXT NOT NULL, pass_hash TEXT, salt TEXT, token TEXT NOT NULL, slots TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     ),
     env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_meet_people_name ON meet_people(meeting_id, name_key)"),
-  ]).catch((err) => {
+  ])
+    // added later: "what's it about" (ignore the error once the column exists)
+    .then(() => env.DB.prepare("ALTER TABLE meetings ADD COLUMN description TEXT").run().catch(() => {}))
+    .catch((err) => {
     schemaReady = null;
     throw err;
   });
@@ -98,6 +102,7 @@ async function loadMeeting(env, id, { touch = true } = {}) {
 const publicMeeting = (m) => ({
   id: m.id,
   title: m.title,
+  description: m.description || "",
   kind: m.kind,
   tz: m.tz,
   start_min: m.start_min,
@@ -139,6 +144,7 @@ export async function handleMeetings(request, env, parts) {
     if (!b) return fail("That didn’t come through. Please try again.");
     const title = clean(b.title, 80);
     if (!title) return fail("Please give your meeting a name.");
+    const description = clean(b.description, 400);
     const kind = b.kind === "week" ? "week" : "dates";
     const startMin = Number(b.start_min);
     const endMin = Number(b.end_min);
@@ -154,6 +160,8 @@ export async function handleMeetings(request, env, parts) {
       if (days.length > MAX_DATES) return fail(`Pick up to ${MAX_DATES} dates.`);
       const yesterday = new Date(Date.now() - DAY).toISOString().slice(0, 10);
       if (days[days.length - 1] < yesterday) return fail("Pick dates in the future.");
+      const latest = new Date(Date.now() + MAX_AHEAD_DAYS * DAY).toISOString().slice(0, 10);
+      if (days[days.length - 1] > latest) return fail("Pick dates within the next 3 months.");
       lastDate = days[days.length - 1];
       slots = [];
       for (const d of days) for (let mm = startMin; mm < endMin; mm += 15) slots.push(`t${Math.round(zonedToUtc(d, mm, tz) / 60000)}`);
@@ -166,9 +174,9 @@ export async function handleMeetings(request, env, parts) {
     const id = randomId(10);
     const now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO meetings (id, title, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO meetings (id, title, description, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now)
+      .bind(id, title, description, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now)
       .run();
     return json({ id }, 201);
   }
