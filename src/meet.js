@@ -4,9 +4,11 @@
 //  - "dates" mode: specific dates; each slot is an absolute instant, stored as "t<UTC epoch minutes>",
 //    so every viewer can see the grid in their own time zone.
 //  - "week" mode: days of the week; slots are "w<day 0-6>:<minute of day>", not tied to a time zone.
-// People sign in with a name (+ optional password) per meeting, like When2meet: a new name creates a
-// person; a returning name must give the same password if one was set. The sign-in returns a token
-// kept on the device; saving availability needs that token.
+// People add their availability with just a name (no password): a new name creates a person, a
+// returning name gets that person back. The browser remembers it (the returned token) per meeting.
+// Each person marks slots as available or "if needed" (maybe).
+// New meetings use 30-minute slots (older ones keep 15) and a 6-digit PIN as their id, shared with
+// trip events, so anyone can join by typing the PIN.
 
 const DAY = 86_400_000;
 const AFTER_END_MS = 30 * DAY; // dates mode: deleted one month after the last date
@@ -16,6 +18,20 @@ const MAX_DATES = 100; // up to ~3 months ahead, like the create calendar
 const MAX_AHEAD_DAYS = 95;
 const MAX_PEOPLE = 200;
 const ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** A 6-digit PIN not used by any meeting or trip event. */
+export async function freePin(env) {
+  for (let i = 0; i < 20; i++) {
+    const n = 100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000);
+    const pin = String(n);
+    const [a, b] = await Promise.all([
+      env.DB.prepare("SELECT 1 FROM meetings WHERE id = ?").bind(pin).first(),
+      env.DB.prepare("SELECT 1 FROM events WHERE id = ?").bind(pin).first(),
+    ]);
+    if (!a && !b) return pin;
+  }
+  return randomId(10); // practically never: fall back to a long id
+}
 
 const randomId = (len) => Array.from(crypto.getRandomValues(new Uint8Array(len)), (b) => ALPHABET[b % ALPHABET.length]).join("");
 const json = (data, status = 200) =>
@@ -52,12 +68,6 @@ function zonedToUtc(date, minute, tz) {
   return utc;
 }
 
-async function hashPassword(password, salt) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 5000 }, key, 256);
-  return btoa(String.fromCharCode(...new Uint8Array(bits)));
-}
-
 let schemaReady = null;
 export function ensureMeetSchema(env) {
   schemaReady ??= env.DB.batch([
@@ -70,7 +80,16 @@ export function ensureMeetSchema(env) {
     env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_meet_people_name ON meet_people(meeting_id, name_key)"),
   ])
     // added later: "what's it about" (ignore the error once the column exists)
-    .then(() => env.DB.prepare("ALTER TABLE meetings ADD COLUMN description TEXT").run().catch(() => {}))
+    .then(() =>
+      Promise.all(
+        [
+          "ALTER TABLE meetings ADD COLUMN description TEXT",
+          "ALTER TABLE meetings ADD COLUMN creator TEXT",
+          "ALTER TABLE meetings ADD COLUMN step INTEGER",
+          "ALTER TABLE meet_people ADD COLUMN maybe TEXT",
+        ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
+      ),
+    )
     .catch((err) => {
     schemaReady = null;
     throw err;
@@ -103,6 +122,8 @@ const publicMeeting = (m) => ({
   id: m.id,
   title: m.title,
   description: m.description || "",
+  creator: m.creator || "",
+  step: m.step || 15,
   kind: m.kind,
   tz: m.tz,
   start_min: m.start_min,
@@ -145,10 +166,12 @@ export async function handleMeetings(request, env, parts) {
     const title = clean(b.title, 80);
     if (!title) return fail("Please give your meeting a name.");
     const description = clean(b.description, 400);
+    const creator = clean(b.creator, 40);
+    const STEP = 30; // half-hour rows, like LettuceMeet
     const kind = b.kind === "week" ? "week" : "dates";
     const startMin = Number(b.start_min);
     const endMin = Number(b.end_min);
-    if (!Number.isInteger(startMin) || !Number.isInteger(endMin) || startMin < 0 || endMin > 1440 || startMin % 15 || endMin % 15 || endMin <= startMin)
+    if (!Number.isInteger(startMin) || !Number.isInteger(endMin) || startMin < 0 || endMin > 1440 || startMin % STEP || endMin % STEP || endMin <= startMin)
       return fail("“No later than” must be after “No earlier than”.");
     const tz = typeof b.tz === "string" && validTz(b.tz) ? b.tz : "UTC";
     let days;
@@ -164,19 +187,19 @@ export async function handleMeetings(request, env, parts) {
       if (days[days.length - 1] > latest) return fail("Pick dates within the next 3 months.");
       lastDate = days[days.length - 1];
       slots = [];
-      for (const d of days) for (let mm = startMin; mm < endMin; mm += 15) slots.push(`t${Math.round(zonedToUtc(d, mm, tz) / 60000)}`);
+      for (const d of days) for (let mm = startMin; mm < endMin; mm += STEP) slots.push(`t${Math.round(zonedToUtc(d, mm, tz) / 60000)}`);
     } else {
       days = [...new Set((Array.isArray(b.days) ? b.days : []).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
       if (!days.length) return fail("Pick at least one day.");
       slots = [];
-      for (const d of days) for (let mm = startMin; mm < endMin; mm += 15) slots.push(`w${d}:${mm}`);
+      for (const d of days) for (let mm = startMin; mm < endMin; mm += STEP) slots.push(`w${d}:${mm}`);
     }
-    const id = randomId(10);
+    const id = await freePin(env);
     const now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO meetings (id, title, description, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO meetings (id, title, description, creator, step, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, description, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now)
+      .bind(id, title, description, creator, STEP, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now)
       .run();
     return json({ id }, 201);
   }
@@ -188,43 +211,36 @@ export async function handleMeetings(request, env, parts) {
   if (parts.length === 2 && method === "GET") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
-    const { results } = await env.DB.prepare("SELECT id, name, slots, (pass_hash IS NOT NULL) AS has_password FROM meet_people WHERE meeting_id = ? ORDER BY created_at")
+    const { results } = await env.DB.prepare("SELECT id, name, slots, maybe FROM meet_people WHERE meeting_id = ? ORDER BY created_at")
       .bind(mid)
       .all();
-    return json({ meeting: publicMeeting(m), people: results.map((r) => ({ id: r.id, name: r.name, slots: JSON.parse(r.slots), protected: !!r.has_password })) });
+    return json({ meeting: publicMeeting(m), people: results.map((r) => ({ id: r.id, name: r.name, slots: JSON.parse(r.slots), maybe: JSON.parse(r.maybe || "[]") })) });
   }
 
-  // POST /api/meetings/:id/signin  { name, password? } → { id, token, name, slots }
+  // POST /api/meetings/:id/signin  { name } → { id, token, name, slots, maybe }   (no passwords)
   if (parts.length === 3 && parts[2] === "signin" && method === "POST") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
     const b = await readJson(request);
     const name = clean(b?.name, 40);
-    const password = typeof b?.password === "string" ? b.password.slice(0, 100) : "";
     if (!name) return fail("Please enter your name.");
     const key = name.toLowerCase();
     const existing = await env.DB.prepare("SELECT * FROM meet_people WHERE meeting_id = ? AND name_key = ?").bind(mid, key).first();
-    if (existing) {
-      if (existing.pass_hash && (await hashPassword(password, existing.salt)) !== existing.pass_hash)
-        return fail("That name is taken and the password doesn’t match. Use the same password as before, or a different name.", 403);
-      return json({ id: existing.id, token: existing.token, name: existing.name, slots: JSON.parse(existing.slots) });
-    }
+    if (existing) return json({ id: existing.id, token: existing.token, name: existing.name, slots: JSON.parse(existing.slots), maybe: JSON.parse(existing.maybe || "[]") });
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM meet_people WHERE meeting_id = ?").bind(mid).first("n");
     if (count >= MAX_PEOPLE) return fail("This meeting is full.", 409);
     const id = randomId(10);
     const token = randomId(24);
-    const salt = password ? randomId(16) : null;
-    const hash = password ? await hashPassword(password, salt) : null;
     const now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO meet_people (id, meeting_id, name, name_key, pass_hash, salt, token, slots, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)",
+      "INSERT INTO meet_people (id, meeting_id, name, name_key, pass_hash, salt, token, slots, maybe, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, NULL, ?, '[]', '[]', ?, ?)",
     )
-      .bind(id, mid, name, key, hash, salt, token, now, now)
+      .bind(id, mid, name, key, token, now, now)
       .run();
-    return json({ id, token, name, slots: [] }, 201);
+    return json({ id, token, name, slots: [], maybe: [] }, 201);
   }
 
-  // PUT /api/meetings/:id/people/:pid  { token, slots[] } — saved immediately after each change
+  // PUT /api/meetings/:id/people/:pid  { token, slots[], maybe[] } — available and "if needed" slots
   if (parts.length === 4 && parts[2] === "people" && method === "PUT") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
@@ -232,8 +248,13 @@ export async function handleMeetings(request, env, parts) {
     const person = await env.DB.prepare("SELECT token FROM meet_people WHERE id = ? AND meeting_id = ?").bind(parts[3], mid).first();
     if (!person || !b || person.token !== b.token) return fail("Please sign in again to change your availability.", 403);
     const allowed = new Set(JSON.parse(m.slots));
-    const slots = [...new Set((Array.isArray(b.slots) ? b.slots : []).filter((s) => typeof s === "string" && allowed.has(s)))];
-    await env.DB.prepare("UPDATE meet_people SET slots = ?, updated_at = ? WHERE id = ?").bind(JSON.stringify(slots), Date.now(), parts[3]).run();
+    const pick = (v) => [...new Set((Array.isArray(v) ? v : []).filter((s) => typeof s === "string" && allowed.has(s)))];
+    const slots = pick(b.slots);
+    const yes = new Set(slots);
+    const maybe = pick(b.maybe).filter((s) => !yes.has(s));
+    await env.DB.prepare("UPDATE meet_people SET slots = ?, maybe = ?, updated_at = ? WHERE id = ?")
+      .bind(JSON.stringify(slots), JSON.stringify(maybe), Date.now(), parts[3])
+      .run();
     return json({ ok: true, count: slots.length });
   }
 

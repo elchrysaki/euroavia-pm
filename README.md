@@ -1,16 +1,15 @@
-# Wingman Tools
+# Wingman
 
-A EUROAVIA no-login group planner for phone, tablet and desktop. The home page (`/`) is **Wingman Tools**, where you pick one of two tools:
+A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like Blitz.
 
-- **Trip days** (`/plan`): works like Lettucemeet, with destination voting and activity ideas. Described below.
-- **Meeting times** (`/meet`): works like When2meet. Described in [Meeting times](#meeting-times).
+- **Header bar** on every page: the outlined Wingman logo (home), **Dashboard**, **Join with PIN** and **+ New event**. Hovering a link shows a faded pill, and the page you're on keeps it. On phones the links fold into a ☰ menu.
+- **Home** (`/`): what Wingman does, **Create an event** (choose **Trip days** or **Meeting times**), a **PIN** box to join one, "See it in action" and three steps.
+- **Dashboard** (`/dashboard`): "Welcome back", what you recently viewed, your meetings and your trips with live counts, and on the right **Create a new event** and **Join with PIN**. Plans the server has deleted drop off the list.
+- **Join with PIN** (`/join`, or `/join?pin=123456`): every new trip and meeting gets a 6-digit PIN as its id (unique across both). Typing it opens the plan. Older plans keep their long links.
+- **Background:** a colour-graded brushed-blue-metal photo (icy for light mode, deep electric for dark mode). It's one fixed layer sized to the tallest the screen can get, so scrolling, the phone toolbar collapsing or an edge bounce never move it, and it's the same on every page, the answer flow included.
+- **Look:** flat (2D) surfaces with soft shadows, solid buttons, one readable type scale (17 px body text, nothing under 13 px) and wider pages on big screens.
 
-Two tabs (like Blitz) sit in the navbar on wide screens and in a bottom tab bar on phones:
-
-- **Dashboard** (`/dashboard`, and `/` once you have plans): every trip and meeting you created or opened on this device, with live counts (people answered, best date or most people free at once). Plans the server has deleted drop off the list.
-- **Create new** (`/new`, and `/` on a first visit): the two tools.
-
-The background is a colour-graded brushed-blue-metal photo: an icy grade for light mode (`public/bg-metal-light.jpg`) and a deep electric grade for dark mode (`public/bg-metal-dark.jpg`).
+## Trip days
 
 1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
 2. **Share the link.** Each person goes through a short animated flow:
@@ -21,8 +20,9 @@ The background is a colour-graded brushed-blue-metal photo: an icy grade for lig
    - submits
 3. **See the result.**
    - **Calendar heatmap:** the darker a day, the more people can come. Tap a day to see who said yes, maybe and no.
+   - **Who responded:** tap a name to see only that person's days (definitely and maybe); tap again or **Show everyone** to go back.
    - **Select dates:** pick several days to see who is free on *all* of them.
-   - **Best dates:** the top days are shown at the top of the calendar.
+   - **Best date:** the day most people can make, at the top of the calendar.
    - **Places leaderboard:** destinations ranked by votes.
    - **Activities:** ideas grouped by destination, with links and likes.
 
@@ -34,12 +34,13 @@ Works like When2meet:
 
 1. **Create** (`/meet`), in two steps:
    - **Dates.** The calendar opens on the next 4 weeks and scrolls up to 3 months ahead. Tap a day, or press and drag to select every date between where you start and where you let go (on a touch screen, hold a day first). The **›** next to a week selects that week, **Select month** selects a month, and quick picks cover the next 7 days, 2 weeks or 4 weeks, weekdays only, or clear. Then press **Let’s meet**.
-   - **Details.** The name, what it’s about, **No earlier than** / **No later than**, and the time zone those hours are in.
-2. **Sign in** on the meeting page (`/m/:id`) with a name and an optional password. Both are only for this meeting. To come back from another device, use the same name and password.
-3. **Mark your availability.** Press on a 15-minute slot and drag a rectangle. Every slot in it flips to the opposite of the slot you started on. Changes are saved as soon as you let go.
+   - **Details.** The name, what it’s about, who created it (optional, shown as "Created by"), **No earlier than** / **No later than** (half-hour steps), and the time zone those hours are in.
+2. **Add availability** on the meeting page (`/m/:id`): just a name, no password. This device remembers you for that meeting. Typing the same name on another device picks your answers back up.
+3. **Mark your times.** Choose **Available**, **If needed** or **Unavailable**, then press on a half-hour slot and drag a rectangle; every slot in it gets that mark (pressing a slot that already has it clears instead). Changes save as you go; **Done** goes back to the group view.
 4. **Group's availability.**
-   - Each slot is shaded by how many people are free.
-   - Hover over (or tap) a slot to see who's available and who isn't.
+   - Each half hour is shaded by how many people are free (if needed counts half).
+   - Hover over (or tap) a time to see who's available, who could if needed, and who can't.
+   - Tap a name under **Responses** to see only that person's times.
    - "Best time so far" shows the longest stretch with the most people.
    - Every viewer sees the times converted to their own time zone, and can switch to any other.
 
@@ -159,11 +160,12 @@ The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman
 | `POST` | `/api/events/:id/responses` | `{ name, yes[], maybe[], destinations[], activities[], likes[] }` → `{ id, token }` |
 | `PUT` | `/api/events/:id/responses/:rid` | same as above + `token` |
 
-| `POST` | `/api/meetings` | `{ title, kind: "dates"\|"week", dates[]\|days[], start_min, end_min, tz }` → `{ id }` |
+| `POST` | `/api/meetings` | `{ title, description?, creator?, kind: "dates"\|"week", dates[]\|days[], start_min, end_min, tz }` → `{ id }` |
 | `GET` | `/api/meetings/:id` | → `{ meeting, people[] }` |
-| `POST` | `/api/meetings/:id/signin` | `{ name, password? }` → `{ id, token, name, slots[] }` |
-| `PUT` | `/api/meetings/:id/people/:pid` | `{ token, slots[] }` |
+| `POST` | `/api/meetings/:id/signin` | `{ name }` → `{ id, token, name, slots[], maybe[] }` |
+| `PUT` | `/api/meetings/:id/people/:pid` | `{ token, slots[], maybe[] }` |
+| `GET` | `/api/pin/:pin` | → `{ kind: "trip" \| "meet", id }` |
 
-Meeting slots are 15 minutes long. A date meeting stores each slot as an absolute instant (`t` + UTC epoch minutes), so every viewer can convert it to their own time zone. A weekday meeting stores `w<day>:<minute>`. Passwords are hashed with PBKDF2.
+New meetings use 30-minute slots (older ones keep 15). A date meeting stores each slot as an absolute instant (`t` + UTC epoch minutes), so every viewer can convert it to their own time zone. A weekday meeting stores `w<day>:<minute>`. There are no passwords: a name gets that person back.
 
 Dates are `YYYY-MM-DD` strings. All input is sanitised on the server: lengths are capped, dates must fall inside the event's range, and links must be http(s). The worker creates and upgrades its own tables on first use, so a new D1 database needs no setup.

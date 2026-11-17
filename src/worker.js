@@ -1,4 +1,4 @@
-import { handleMeetings, sweepMeetings, ensureMeetSchema } from "./meet.js";
+import { handleMeetings, sweepMeetings, ensureMeetSchema, freePin } from "./meet.js";
 // Wingman — Cloudflare Worker API.
 // Static files in /public are served by the assets binding; this worker only handles /api/*.
 
@@ -199,6 +199,20 @@ async function handleApi(request, env, url) {
   if (meet) return meet;
   const method = request.method;
 
+  // GET /api/pin/:pin → { kind: "trip" | "meet", id }   (join by PIN)
+  if (parts.length === 2 && parts[0] === "pin" && method === "GET") {
+    const pin = parts[1].replace(/\D/g, "");
+    if (!/^\d{6}$/.test(pin)) return fail("A PIN has 6 digits.");
+    await ensureMeetSchema(env);
+    const [ev, mt] = await Promise.all([
+      env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(pin).first(),
+      env.DB.prepare("SELECT id FROM meetings WHERE id = ?").bind(pin).first(),
+    ]);
+    if (ev) return json({ kind: "trip", id: pin });
+    if (mt) return json({ kind: "meet", id: pin });
+    return fail("No plan has that PIN. Check the number and try again.", 404);
+  }
+
   // POST /api/events
   if (parts.length === 1 && parts[0] === "events" && method === "POST") {
     const body = await readBody(request);
@@ -215,7 +229,8 @@ async function handleApi(request, env, url) {
     if (end < yesterday) return fail("Pick dates in the future.");
     if (daysBetween(start, end) + 1 > MAX_RANGE_DAYS) return fail("Pick a range of up to two years.");
 
-    const id = randomId(10);
+    await ensureMeetSchema(env); // PINs are unique across trips and meetings
+    const id = await freePin(env);
     await env.DB.prepare(
       "INSERT INTO events (id, title, description, year, start_date, end_date, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )

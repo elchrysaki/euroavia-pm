@@ -3,7 +3,7 @@
 // - App shell (page, script, styles): network first — usually a quick "not changed" check — and
 //   the saved copy if the network is slow (over 2.5 s) or offline.
 // - Everything under /api (events, responses, votes): always straight to the network, never cached.
-const SHELL = "wingman-shell-v8";
+const SHELL = "wingman-shell-v9";
 const SHELL_FILES = ["/", "/app.js", "/styles.css", "/meet.js"];
 
 self.addEventListener("install", (e) => {

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Wingman — find the days that work</title>
-  <meta name="description" content="Wingman Tools: plan trip days or find a meeting time with your group. No logins, just share a link." />
+  <title>Wingman</title>
+  <meta name="description" content="Wingman: find the days for a trip or the hour for a meeting with your group. No logins, just a link or a PIN." />
   <meta name="theme-color" content="#e8f3ff" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#050b18" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -47,38 +47,32 @@
       d.setAttribute("data-perf-reason", why);
     })();
   </script>
-  <link rel="stylesheet" href="/styles.css?v=26" />
+  <link rel="stylesheet" href="/styles.css?v=28" />
 </head>
 <body>
-  <div class="backdrop" aria-hidden="true">
-    <div class="orb orb-a"></div>
-    <div class="orb orb-b"></div>
-    <div class="orb orb-c"></div>
-  </div>
+  <!-- the background: one fixed layer that never moves or re-scales, the same on every page -->
+  <div class="backdrop" aria-hidden="true"></div>
 
-  <header class="navbar" id="navbar">
-    <a href="/" class="brand" data-link>
+  <header class="topbar" id="navbar">
+    <a href="/" class="brand" data-link aria-label="Wingman home">
       <span class="brand-mark" aria-hidden="true"></span>
       <span>Wingman</span>
     </a>
+    <a class="navlink" href="/dashboard" data-link data-tab="dashboard">Dashboard</a>
+    <a class="navlink" href="/join" data-link data-tab="join">Join with PIN</a>
+    <span class="grow"></span>
     <div class="nav-actions" id="navActions"></div>
+    <button type="button" class="btn btn-primary nav-new" data-new>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>New event</span>
+    </button>
+    <button type="button" class="menu-btn" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><i></i><i></i><i></i></button>
   </header>
-
-  <nav class="tabbar" id="tabbar" aria-label="Sections">
-    <a href="/dashboard" data-link data-tab="dashboard">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7.5" height="9" rx="2"/><rect x="13" y="3.5" width="7.5" height="5.5" rx="2"/><rect x="3.5" y="14.5" width="7.5" height="6" rx="2"/><rect x="13" y="11" width="7.5" height="9.5" rx="2"/></svg>
-      <span>Dashboard</span>
-    </a>
-    <a href="/new" data-link data-tab="new">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg>
-      <span>Create new</span>
-    </a>
-  </nav>
 
   <main id="app" class="app" aria-live="polite"></main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/app.js?v=28" type="module"></script>
+  <script src="/app.js?v=30" type="module"></script>
 </body>
 </html>

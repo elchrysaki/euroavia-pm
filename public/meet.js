@@ -4,10 +4,11 @@
 //   1. Dates: a calendar that opens on the next 4 weeks and scrolls up to 3 months ahead. Tap a day,
 //      drag across many, select a whole week (›) or month, or use the quick picks.
 //   2. Details: name, what it's about, "No earlier than" / "No later than" and the time zone.
-// Meeting page: sign in with a name (+ optional password, only for this meeting), then click and drag
-// rectangles on a 15-minute grid to toggle when you're free; every change is saved immediately.
-// The group grid shades each slot by how many people are free; hover (or tap) a slot to see who.
-// Specific-date meetings can be viewed in any time zone; weekday meetings aren't tied to one.
+// Meeting page: "Add availability" asks just for a name (this device remembers it), then click and drag
+// rectangles on the half-hour grid as Available, If needed or Unavailable; changes save as you go.
+// The group grid shades each time by how many people are free (if needed counts half); hover or tap
+// a time to see who, or tap a name to see only that person's times. Times show in your own time
+// zone by default, and you can pick another.
 
 let K; // shared kit from app.js: $, esc, icon, api, toast, store, …
 
@@ -70,9 +71,10 @@ export function renderMeetCreate() {
   const st = { yes: new Set(), maybe: new Set(), mode: "yes" };
   const tzs = allTimeZones();
   const here = viewerTz();
+  // half-hour steps, like the grid
   const hourOpts = (from, to, sel) =>
-    Array.from({ length: to - from + 1 }, (_, i) => from + i)
-      .map((h) => `<option value="${h * 60}" ${h * 60 === sel ? "selected" : ""}>${esc(timeLabel(h * 60))}${h === 24 ? " (midnight)" : ""}</option>`)
+    Array.from({ length: (to - from) * 2 + 1 }, (_, i) => from * 60 + i * 30)
+      .map((m) => `<option value="${m}" ${m === sel ? "selected" : ""}>${esc(timeLabel(m))}${m === 1440 ? " (midnight)" : ""}</option>`)
       .join("");
 
   // weeks: Monday-first rows; a month label before the first week and before each week holding a 1st
@@ -144,11 +146,12 @@ export function renderMeetCreate() {
         <div class="group well">
           <div class="row"><label for="mTitle">Name</label><input id="mTitle" maxlength="80" placeholder="IT WG weekly sync" required /></div>
           <div class="row"><label for="mDesc">What’s it about</label><textarea id="mDesc" maxlength="400" placeholder="Optional"></textarea></div>
+          <div class="row"><label for="mBy">Created by</label><input id="mBy" maxlength="40" placeholder="Your name (optional)" autocomplete="name" value="${esc(store.get("convene:name", ""))}" /></div>
         </div>
         <div class="section-header">Hours</div>
         <div class="group well">
-          <div class="row"><label for="mStart">No earlier than</label><select id="mStart" class="time-select">${hourOpts(0, 23, 540)}</select></div>
-          <div class="row"><label for="mEnd">No later than</label><select id="mEnd" class="time-select">${hourOpts(1, 24, 1020)}</select></div>
+          <div class="row"><label for="mStart">No earlier than</label><select id="mStart" class="time-select">${hourOpts(0, 23.5, 540)}</select></div>
+          <div class="row"><label for="mEnd">No later than</label><select id="mEnd" class="time-select">${hourOpts(0.5, 24, 1020)}</select></div>
           <div class="row"><label for="mTz">Time zone</label><select id="mTz" class="time-select">${tzs.map((z) => `<option ${z === here ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></div>
         </div>
         <p class="fineprint">${icon("clock")}<span>These hours are in the time zone above. Everyone who opens the link sees the times converted to their own time zone, and can switch to another one.</span></p>
@@ -248,6 +251,7 @@ export function renderMeetCreate() {
     const body = {
       title,
       description: $("#mDesc").value.trim(),
+      creator: $("#mBy").value.trim(),
       kind: "dates",
       dates: [...st.yes].sort(),
       start_min: Number($("#mStart").value),
@@ -258,7 +262,8 @@ export function renderMeetCreate() {
     try {
       const { id } = await api("/meetings", { method: "POST", body });
       const list = store.get("wingman:meets", []).filter((x) => x.id !== id);
-      list.unshift({ id, title, kind: "dates" });
+      list.unshift({ id, title, kind: "dates", mine: true });
+      if (body.creator) store.set("convene:name", body.creator);
       store.set("wingman:meets", list.slice(0, 20));
       navigate(`/m/${id}`);
       K.buzz([15, 60, 15]);
@@ -391,10 +396,10 @@ const fmtShort = (date) => K.parseDate(date).toLocaleDateString(undefined, { wee
 /* Meeting page                                                        */
 /* ------------------------------------------------------------------ */
 
-let M = null; // { meeting, people, me, tz, mine:Set, page, focus }
+let M = null; // { meeting, people, me, tz, mine:{yes:Set, maybe:Set}, page, focus, filter, editing, mode }
 
 export async function renderMeeting(id) {
-  const { app, $, esc, icon, api } = K;
+  const { app, esc, icon, api } = K;
   app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   let data;
   try {
@@ -404,39 +409,47 @@ export async function renderMeeting(id) {
     return;
   }
   const saved = store.get(`wingman:meet:${id}`);
-  const me = saved && data.people.find((p) => p.id === saved.id) ? saved : null;
+  const meRow = saved && data.people.find((p) => p.id === saved.id);
   M = {
     ...data,
-    me,
-    tz: data.meeting.kind === "dates" ? store.get("wingman:tz", viewerTz()) : null,
-    mine: new Set(me ? data.people.find((p) => p.id === me.id).slots : []),
+    me: meRow ? saved : null,
+    tz: viewerTz(), // your own time zone by default; you can pick another
+    mine: { yes: new Set(meRow ? meRow.slots : []), maybe: new Set(meRow ? meRow.maybe || [] : []) },
     page: 0,
     focus: null,
-    view: "you",
+    filter: null,
+    editing: false,
+    mode: "yes",
   };
   const recent = store.get("wingman:meets", []);
   if (!recent.some((x) => x.id === id)) {
     recent.unshift({ id, title: data.meeting.title, kind: data.meeting.kind });
     store.set("wingman:meets", recent.slice(0, 20));
   }
+  K.markViewed?.("meet", id, data.meeting.title);
   paint();
+  document.removeEventListener("visibilitychange", refreshOnReturn);
   document.addEventListener("visibilitychange", refreshOnReturn);
 }
 
 function refreshOnReturn() {
-  if (document.visibilityState !== "visible" || !M || !location.pathname.startsWith(`/m/${M.meeting.id}`)) return;
+  if (document.visibilityState !== "visible" || !M || M.editing || !location.pathname.startsWith(`/m/${M.meeting.id}`)) return;
   K.api(`/meetings/${M.meeting.id}`)
     .then((d) => {
       M.people = d.people;
-      paintGrids();
+      paintBody();
     })
     .catch(() => {});
 }
 
+const step = () => M.meeting.step || 15;
+/** Each person's sets; yours come from what you're editing right now. */
+const setsOf = (p) => (M.me && p.id === M.me.id ? M.mine : { yes: new Set(p.slots), maybe: new Set(p.maybe || []) });
+
 /** Columns × rows of the grid, in the viewer's time zone for date meetings. */
 function layout() {
   const { meeting } = M;
-  const cols = new Map(); // key -> { label, sub, cells: Map(minute -> slotKey) }
+  const cols = new Map();
   const minutes = new Set();
   for (const s of meeting.slots) {
     let key;
@@ -454,8 +467,7 @@ function layout() {
     cols.get(key).set(minute, s);
     minutes.add(minute);
   }
-  const keys = [...cols.keys()].sort();
-  const columns = keys.map((k) => {
+  const columns = [...cols.keys()].sort().map((k) => {
     if (meeting.kind === "dates") {
       const d = K.parseDate(k);
       return { key: k, top: DOW_SHORT[d.getDay()], bottom: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), cells: cols.get(k), long: d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) };
@@ -463,8 +475,7 @@ function layout() {
     const dow = Number(k.slice(2));
     return { key: k, top: DOW_SHORT[dow], bottom: "", cells: cols.get(k), long: DOW_LONG[dow] };
   });
-  const rows = [...minutes].sort((a, b) => a - b);
-  return { columns, rows };
+  return { columns, rows: [...minutes].sort((a, b) => a - b) };
 }
 
 function paint() {
@@ -474,207 +485,268 @@ function paint() {
   const url = `${location.origin}/m/${meeting.id}`;
   navActions.innerHTML = `<button class="btn btn-tinted nav-share" id="navShare" aria-label="Share meeting">${icon("share")}<span>Share</span></button>`;
   document.getElementById("navShare").onclick = () => shareLink(url, meeting.title);
-  const window_ = `${timeLabel(meeting.start_min)}–${timeLabel(meeting.end_min)}`;
-  const what =
-    meeting.kind === "dates"
-      ? `${meeting.days.length} ${meeting.days.length === 1 ? "date" : "dates"}`
-      : meeting.days
-          .slice()
-          .sort((a, b) => DOW_MON_FIRST.indexOf(a) - DOW_MON_FIRST.indexOf(b))
-          .map((d) => DOW_SHORT[d])
-          .join(", ");
   const tzs = allTimeZones();
+  if (!tzs.includes(M.tz)) tzs.unshift(M.tz);
   const days = Math.ceil((meeting.delete_at - Date.now()) / 86_400_000);
+  const pin = /^\d{6}$/.test(meeting.id) ? K.pinText(meeting.id) : "";
   app.innerHTML = `
-    <div class="meet-page">
-      <header class="meet-head pass-card fade-in">
-        <div class="pass-row"><span class="pass-airline">${icon("clock")} Meeting times</span><span class="pass-code">WM-${esc(meeting.id.slice(0, 4).toUpperCase())}</span></div>
-        <h1 class="large-title">${esc(meeting.title)}</h1>
-        ${meeting.description ? `<p class="meet-desc">${esc(meeting.description)}</p>` : ""}
-        <p class="subtitle">${esc(what)} · ${esc(window_)}${meeting.kind === "dates" ? ` · created in ${esc(meeting.tz)}` : ""}</p>
+    <div class="mtg">
+      <header class="mtg-head">
+        <p class="eyebrow">Meeting times${pin ? ` · PIN ${esc(pin)}` : ""}</p>
+        <h1 class="display">${esc(meeting.title)}</h1>
+        ${meeting.description ? `<p class="lede">${esc(meeting.description)}</p>` : ""}
+        <p class="mtg-meta">${meeting.creator ? `Created by <b>${esc(meeting.creator)}</b> · ` : ""}${esc(String(meeting.days.length))} ${meeting.days.length === 1 ? "date" : "dates"} · ${esc(timeLabel(meeting.start_min))}–${esc(timeLabel(meeting.end_min))} ${meeting.kind === "dates" ? `in ${esc(meeting.tz)}` : ""}</p>
         ${
           meeting.kind === "dates"
-            ? `<div class="meet-tz"><label for="viewTz">${icon("clock")} Times shown in</label><select id="viewTz" class="field">${tzs.map((z) => `<option ${z === M.tz ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></div>`
+            ? `<label class="tz-pick">${icon("clock")}<span>Times shown in</span><select id="viewTz">${tzs.map((z) => `<option ${z === M.tz ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></label>`
             : ""
         }
         ${days <= 7 ? `<p class="expiry-note">${icon("lock")}<span>This meeting will be deleted on <b>${esc(new Date(meeting.delete_at).toLocaleDateString(undefined, { month: "long", day: "numeric" }))}</b>.</span></p>` : ""}
       </header>
-      <div id="meetVerdict"></div>
-      <div class="segmented tabs meet-tabs" data-seg="mview" role="tablist">
-        <span class="thumb"></span>
-        <button type="button" data-value="you" aria-pressed="${M.view === "you"}">Your availability</button>
-        <button type="button" data-value="group" aria-pressed="${M.view === "group"}">Group</button>
-      </div>
-      <div class="meet-grids" data-view="${M.view}">
-        <section class="card meet-panel meet-you">
-          <div id="youPanel"></div>
-        </section>
-        <section class="card meet-panel meet-group">
-          <div class="mp-head"><h2>Group’s availability</h2><div class="legend" id="groupLegend"></div></div>
-          <div class="mgrid-wrap" id="groupGrid"></div>
-          <div class="who" id="who"></div>
-        </section>
-      </div>
+      <div id="mtgBody"></div>
     </div>`;
-  K.setupSegmented(K.$('[data-seg="mview"]'), (v) => {
-    M.view = v;
-    K.$(".meet-grids").dataset.view = v;
-  });
   K.$("#viewTz")?.addEventListener("change", (e) => {
     M.tz = e.target.value;
-    store.set("wingman:tz", M.tz);
     M.page = 0;
-    paintGrids();
+    paintBody();
   });
-  paintYouPanel();
-  paintGrids();
+  paintBody();
+  window.removeEventListener("resize", onResize);
   window.addEventListener("resize", onResize);
 }
 
 let resizeT;
 function onResize() {
   clearTimeout(resizeT);
-  resizeT = setTimeout(() => M && K.$(".meet-page") && paintGrids(), 150);
+  resizeT = setTimeout(() => M && K.$("#mtgBody") && paintGridOnly(), 150);
 }
 
-function paintYouPanel() {
-  const { $, esc, icon, api, toast } = K;
-  const panel = $("#youPanel");
-  if (!M.me) {
-    panel.innerHTML = `
-      <div class="mp-head"><h2>Sign in to add your availability</h2></div>
-      <form class="signin stack" id="signin">
-        <div class="group well">
-          <div class="row"><label for="siName">Name</label><input id="siName" maxlength="40" placeholder="Your name" autocomplete="given-name" value="${esc(store.get("convene:name", ""))}" required /></div>
-          <div class="row"><label for="siPass">Password</label><input id="siPass" type="password" maxlength="100" placeholder="Optional" autocomplete="new-password" /></div>
+/** Everything under the header: best time, the grid, and the people panel. */
+function paintBody() {
+  const { $, esc, icon, avatar } = K;
+  const body = $("#mtgBody");
+  if (!body) return;
+  const n = M.people.length;
+  const meName = M.me?.name;
+  const editing = M.editing;
+  body.innerHTML = `
+    <div id="mtgBest"></div>
+    <div class="mtg-main">
+      <section class="card mtg-grid-card">
+        <div class="mtg-grid-head">
+          ${
+            editing
+              ? `<div><h2>Your availability</h2><p class="mtg-hint">Drag across the times you can make. <span id="saveState">Saved automatically.</span></p></div>
+                 <div class="paint-modes" role="group" aria-label="Mark as">
+                   <button type="button" data-mode="yes" aria-pressed="${M.mode === "yes"}"><span class="sw yes"></span>Available</button>
+                   <button type="button" data-mode="maybe" aria-pressed="${M.mode === "maybe"}"><span class="sw maybe"></span>If needed</button>
+                   <button type="button" data-mode="erase" aria-pressed="${M.mode === "erase"}"><span class="sw none"></span>Unavailable</button>
+                 </div>`
+              : `<div><h2>${M.filter ? `${esc(M.people.find((p) => p.id === M.filter)?.name || "")}’s availability` : "Group availability"}</h2>
+                 <p class="mtg-hint">${M.filter ? `<button type="button" class="btn-link" id="clearFilter">Show everyone</button>` : n ? "Darker means more people are free. Hover over or tap a time to see who." : "No one has added their availability yet."}</p></div>
+                 <div class="legend mtg-legend" id="mtgLegend"></div>`
+          }
         </div>
-        <p class="fineprint">${icon("lock")}<span>Your name and password are only for this meeting. New here? Pick any password, or leave it empty. Coming back? Use the same name and password.</span></p>
-        <button class="btn btn-primary btn-block" type="submit">Sign in</button>
-      </form>`;
-    $("#signin").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name = $("#siName").value.trim();
-      if (!name) return $("#siName").focus();
-      try {
-        const res = await api(`/meetings/${M.meeting.id}/signin`, { method: "POST", body: { name, password: $("#siPass").value } });
-        M.me = { id: res.id, token: res.token, name: res.name };
-        store.set(`wingman:meet:${M.meeting.id}`, M.me);
-        store.set("convene:name", res.name);
-        if (!M.people.some((p) => p.id === res.id)) M.people.push({ id: res.id, name: res.name, slots: [] });
-        M.mine = new Set(res.slots);
-        paintYouPanel();
-        paintGrids();
-        K.buzz(12);
-      } catch (err) {
-        toast(err.message, { error: true });
-      }
-    });
-    return;
-  }
-  panel.innerHTML = `
-    <div class="mp-head">
-      <h2>${esc(M.me.name)}’s availability</h2>
-      <div class="legend"><span class="lg-key off"></span>Unavailable <span class="lg-key on"></span>Available</div>
-    </div>
-    <p class="picker-hint">Click and drag to mark when you’re free. <span id="saveState">Saved automatically.</span> <button type="button" class="btn-link" id="signOut">Not ${esc(M.me.name)}?</button></p>
-    <div class="mgrid-wrap" id="youGrid"></div>`;
-  $("#signOut").addEventListener("click", () => {
+        <div id="mtgGrid"></div>
+      </section>
+      <aside class="mtg-side">
+        ${
+          editing
+            ? `<button type="button" class="btn btn-primary btn-block" id="doneEdit">${icon("check")} Done</button>
+               <p class="mtg-side-note">Signed in as <b>${esc(meName)}</b> on this device. <button type="button" class="btn-link" id="notMe">Not you?</button></p>`
+            : `<button type="button" class="btn btn-primary btn-block" id="addAvail">${icon(M.me ? "pencil" : "plus")} ${M.me ? "Edit your availability" : "Add availability"}</button>`
+        }
+        <div class="card mtg-people">
+          <h3>Responses <span>${n}</span></h3>
+          ${
+            n
+              ? `<ul class="mtg-plist">${M.people
+                  .map(
+                    (p) => `<li><button type="button" class="person${M.filter === p.id ? " on" : ""}" data-person="${esc(p.id)}" aria-pressed="${M.filter === p.id}">${avatar(p.name, "sm")}<span>${esc(p.name)}${
+                      M.me && p.id === M.me.id ? ' <small>(you)</small>' : ""
+                    }</span></button></li>`,
+                  )
+                  .join("")}</ul><p class="mtg-side-note">Tap a name to see only their times.</p>`
+              : `<p class="mtg-side-note">Be the first: add the times you can make.</p>`
+          }
+        </div>
+        <div class="card mtg-who" id="who"></div>
+      </aside>
+    </div>`;
+
+  $("#addAvail")?.addEventListener("click", startEditing);
+  $("#doneEdit")?.addEventListener("click", () => {
+    M.editing = false;
+    flushSave();
+    paintBody();
+    K.toast("Your availability is saved");
+  });
+  $("#notMe")?.addEventListener("click", () => {
     store.set(`wingman:meet:${M.meeting.id}`, null);
     M.me = null;
-    M.mine = new Set();
-    paintYouPanel();
-    paintGrids();
+    M.mine = { yes: new Set(), maybe: new Set() };
+    M.editing = false;
+    paintBody();
+  });
+  $("#clearFilter")?.addEventListener("click", () => {
+    M.filter = null;
+    paintBody();
+  });
+  body.querySelectorAll("[data-person]").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (M.editing) return;
+      M.filter = M.filter === b.dataset.person ? null : b.dataset.person;
+      M.focus = null;
+      paintBody();
+    }),
+  );
+  body.querySelectorAll("[data-mode]").forEach((b) =>
+    b.addEventListener("click", () => {
+      M.mode = b.dataset.mode;
+      body.querySelectorAll("[data-mode]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    }),
+  );
+  paintGridOnly();
+}
+
+/** Ask for a name (remembered on this device), then switch the grid to editing your times. */
+async function startEditing() {
+  const { esc, icon, api, toast } = K;
+  if (M.me) {
+    M.editing = true;
+    M.filter = null;
+    return paintBody();
+  }
+  K.openSheet(`
+    <div class="sheet-head"><div><h2>Add your availability</h2><div class="sheet-sub">Just your name. This device remembers you for this meeting.</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    <form class="stack" id="nameForm"><input class="big-input" name="name" maxlength="40" placeholder="Your name" autocomplete="name" value="${esc(store.get("convene:name", ""))}" required />
+    <button class="btn btn-primary btn-block" type="submit">Continue</button></form>`);
+  const f = document.getElementById("nameForm");
+  setTimeout(() => f.name.focus(), 50);
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = f.name.value.trim();
+    if (!name) return;
+    try {
+      const res = await api(`/meetings/${M.meeting.id}/signin`, { method: "POST", body: { name } });
+      M.me = { id: res.id, token: res.token, name: res.name };
+      store.set(`wingman:meet:${M.meeting.id}`, M.me);
+      store.set("convene:name", res.name);
+      if (!M.people.some((p) => p.id === res.id)) M.people.push({ id: res.id, name: res.name, slots: [], maybe: [] });
+      M.mine = { yes: new Set(res.slots), maybe: new Set(res.maybe || []) };
+      K.closeSheet();
+      M.editing = true;
+      M.filter = null;
+      paintBody();
+      K.buzz(12);
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
   });
 }
 
-/** How many columns fit; both grids page together on narrow screens. */
+/** How many day columns fit; on narrow screens the grid pages through the days. */
 function pageSize(total) {
-  const wrap = K.$(".meet-panel");
-  const width = wrap ? wrap.clientWidth - 70 : 320;
-  return Math.max(3, Math.min(total, Math.floor(width / 46)));
+  const card = K.$(".mtg-grid-card");
+  const width = card ? card.clientWidth - 90 : 320;
+  return Math.max(3, Math.min(total, Math.floor(width / 64)));
 }
 
-function gridHtml(kind, L, size) {
-  const { esc } = K;
+function score(slot) {
+  let s = 0;
+  for (const p of M.people) {
+    const st = setsOf(p);
+    if (st.yes.has(slot)) s += 1;
+    else if (st.maybe.has(slot)) s += 0.5;
+  }
+  return s;
+}
+
+function paintGridOnly() {
+  const { $, esc } = K;
+  const host = $("#mtgGrid");
+  if (!host) return;
+  const L = layout();
+  const size = pageSize(L.columns.length);
+  M.page = Math.min(M.page, Math.max(0, L.columns.length - size));
   const cols = L.columns.slice(M.page, M.page + size);
   const n = M.people.length;
-  const counts = new Map();
-  for (const p of M.people) for (const s of p.id === M.me?.id ? M.mine : p.slots) counts.set(s, (counts.get(s) || 0) + 1);
-  const head = `<div class="mg-corner"></div>${cols.map((c) => `<div class="mg-col"><b>${esc(c.top)}</b>${c.bottom ? `<span>${esc(c.bottom)}</span>` : ""}</div>`).join("")}`;
-  let body = "";
+  const filterSets = M.filter ? setsOf(M.people.find((p) => p.id === M.filter) || { slots: [], maybe: [] }) : null;
+  const head = `<div class="g-corner"></div>${cols.map((c) => `<div class="g-col"><b>${esc(c.top)}</b>${c.bottom ? `<span>${esc(c.bottom)}</span>` : ""}</div>`).join("")}`;
+  let rows = "";
   L.rows.forEach((minute, r) => {
     const onHour = minute % 60 === 0;
-    body += `<div class="mg-time${onHour ? " hour" : ""}">${onHour ? esc(hourLabel(minute)) : ""}</div>`;
+    rows += `<div class="g-time${onHour ? " hour" : ""}">${onHour || step() >= 30 ? esc(timeLabel(minute)) : ""}</div>`;
     cols.forEach((c, ci) => {
       const slot = c.cells.get(minute);
-      if (!slot) return void (body += `<div class="ms none${onHour ? " hour" : ""}"></div>`);
-      if (kind === "you") body += `<div class="ms${M.mine.has(slot) ? " on" : ""}${onHour ? " hour" : ""}" data-s="${slot}" data-c="${ci}" data-r="${r}"></div>`;
-      else {
-        const k = counts.get(slot) || 0;
-        body += `<div class="ms g${k ? " heat" : ""}${onHour ? " hour" : ""}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}" tabindex="-1"></div>`;
+      const cls = `g-cell${onHour ? " hour" : ""}`;
+      if (!slot) return void (rows += `<div class="${cls} none"></div>`);
+      if (M.editing) {
+        const st = M.mine.yes.has(slot) ? " yes" : M.mine.maybe.has(slot) ? " maybe" : "";
+        rows += `<div class="${cls} edit${st}" data-s="${slot}" data-c="${ci}" data-r="${r}"></div>`;
+      } else if (filterSets) {
+        const st = filterSets.yes.has(slot) ? " yes" : filterSets.maybe.has(slot) ? " maybe" : "";
+        rows += `<div class="${cls} solo${st}" data-s="${slot}"></div>`;
+      } else {
+        const k = score(slot);
+        rows += `<div class="${cls} g${k ? " heat" : ""}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}"></div>`;
       }
     });
   });
   const pager =
     L.columns.length > size
-      ? `<div class="mg-pager"><button type="button" class="btn btn-icon" data-page="-1" ${M.page === 0 ? "disabled" : ""} aria-label="Earlier days">‹</button><span>${M.page + 1}–${Math.min(M.page + size, L.columns.length)} of ${L.columns.length}</span><button type="button" class="btn btn-icon" data-page="1" ${M.page + size >= L.columns.length ? "disabled" : ""} aria-label="Later days">›</button></div>`
+      ? `<div class="g-pager"><button type="button" class="btn btn-icon" data-page="-1" ${M.page === 0 ? "disabled" : ""} aria-label="Earlier days">‹</button><span>Days ${M.page + 1}–${Math.min(M.page + size, L.columns.length)} of ${L.columns.length}</span><button type="button" class="btn btn-icon" data-page="1" ${M.page + size >= L.columns.length ? "disabled" : ""} aria-label="Later days">›</button></div>`
       : "";
-  return `${pager}<div class="mgrid ${kind}" style="--cols:${cols.length}">${head}${body}</div>`;
-}
-
-function paintGrids() {
-  const { $ } = K;
-  const L = layout();
-  const size = pageSize(L.columns.length);
-  M.page = Math.min(M.page, Math.max(0, L.columns.length - size));
-  const you = $("#youGrid");
-  if (you) {
-    you.innerHTML = gridHtml("you", L, size);
-    bindYouGrid(you, L, size);
-  }
-  const group = $("#groupGrid");
-  group.innerHTML = gridHtml("group", L, size);
-  const n = M.people.length;
-  const steps = Math.min(Math.max(n, 1), 6);
-  $("#groupLegend").innerHTML = `<span>0/${n}</span><span class="legend-scale">${Array.from({ length: steps + 1 }, (_, k) => `<i style="--t:${(k / steps).toFixed(3)}"></i>`).join("")}</span><span>${n}/${n} available</span>`;
-  bindGroupGrid(group);
-  [you, group].forEach((el) =>
-    el?.querySelectorAll("[data-page]").forEach((b) =>
-      b.addEventListener("click", () => {
-        M.page = Math.max(0, M.page + Number(b.dataset.page) * size);
-        paintGrids();
-      }),
-    ),
+  host.innerHTML = `${pager}<div class="tgrid${M.editing ? " editing" : ""}" style="--cols:${cols.length}">${head}${rows}</div>`;
+  host.querySelectorAll("[data-page]").forEach((b) =>
+    b.addEventListener("click", () => {
+      M.page = Math.max(0, M.page + Number(b.dataset.page) * size);
+      paintGridOnly();
+    }),
   );
+  if (M.editing) bindEditGrid(host.querySelector(".tgrid"));
+  else bindGroupGrid(host.querySelector(".tgrid"));
+  const legend = $("#mtgLegend");
+  if (legend && !M.filter) {
+    const steps = Math.min(Math.max(n, 1), 5);
+    legend.innerHTML = `<span>0/${n}</span><span class="legend-scale">${Array.from({ length: steps + 1 }, (_, k) => `<i style="--t:${(k / steps).toFixed(3)}"></i>`).join("")}</span><span>${n}/${n} free</span>`;
+  } else if (legend) legend.innerHTML = `<span class="sw yes"></span>Available <span class="sw maybe"></span>If needed`;
   paintWho();
-  paintVerdict(L);
+  paintBest(L);
 }
 
-/* When2meet-style painting: press on a cell, drag a rectangle; every cell in it becomes the
-   opposite of the cell you started on. Saved as soon as you let go. */
-function bindYouGrid(wrap, L, size) {
-  const grid = wrap.querySelector(".mgrid");
-  const cellAt = (x, y) => document.elementFromPoint(x, y)?.closest?.(".mgrid.you .ms[data-s]");
+/* When2meet-style painting: press on a time and drag a rectangle; every time in it gets the chosen
+   mark (Available / If needed / Unavailable). Saved a moment after you let go. */
+function bindEditGrid(grid) {
+  const cellAt = (x, y) => document.elementFromPoint(x, y)?.closest?.(".tgrid.editing .g-cell[data-s]");
   let drag = null;
+  const cells = [...grid.querySelectorAll(".g-cell[data-s]")];
+  const show = (el, yes, maybe) => {
+    el.classList.toggle("yes", yes);
+    el.classList.toggle("maybe", !yes && maybe);
+  };
   const apply = (end) => {
     const c0 = Math.min(drag.c, end.c);
     const c1 = Math.max(drag.c, end.c);
     const r0 = Math.min(drag.r, end.r);
     const r1 = Math.max(drag.r, end.r);
-    for (const el of drag.cells) {
+    for (const el of cells) {
       const c = +el.dataset.c;
       const r = +el.dataset.r;
-      const inside = c >= c0 && c <= c1 && r >= r0 && r <= r1;
-      const on = inside ? drag.mode : drag.before.has(el.dataset.s);
-      el.classList.toggle("on", on);
+      const s = el.dataset.s;
+      if (c >= c0 && c <= c1 && r >= r0 && r <= r1) show(el, drag.mode === "yes", drag.mode === "maybe");
+      else show(el, drag.yes.has(s), drag.maybe.has(s));
     }
   };
   grid.addEventListener("pointerdown", (e) => {
-    const cell = e.target.closest(".ms[data-s]");
+    const cell = e.target.closest(".g-cell[data-s]");
     if (!cell) return;
     e.preventDefault();
     grid.setPointerCapture(e.pointerId);
-    drag = { c: +cell.dataset.c, r: +cell.dataset.r, mode: !cell.classList.contains("on"), before: new Set(M.mine), cells: [...grid.querySelectorAll(".ms[data-s]")], last: cell };
+    // tapping a time that already has the chosen mark clears it
+    const s = cell.dataset.s;
+    const has = M.mode === "yes" ? M.mine.yes.has(s) : M.mode === "maybe" ? M.mine.maybe.has(s) : false;
+    drag = { c: +cell.dataset.c, r: +cell.dataset.r, mode: has ? "erase" : M.mode, yes: new Set(M.mine.yes), maybe: new Set(M.mine.maybe), last: cell };
     apply({ c: drag.c, r: drag.r });
   });
   grid.addEventListener("pointermove", (e) => {
@@ -686,14 +758,15 @@ function bindYouGrid(wrap, L, size) {
   });
   const end = () => {
     if (!drag) return;
-    for (const el of drag.cells) el.classList.contains("on") ? M.mine.add(el.dataset.s) : M.mine.delete(el.dataset.s);
+    for (const el of cells) {
+      const s = el.dataset.s;
+      M.mine.yes.delete(s);
+      M.mine.maybe.delete(s);
+      if (el.classList.contains("yes")) M.mine.yes.add(s);
+      else if (el.classList.contains("maybe")) M.mine.maybe.add(s);
+    }
     drag = null;
     save();
-    const group = K.$("#groupGrid");
-    group.innerHTML = gridHtml("group", L, size); // group view follows your changes immediately
-    bindGroupGrid(group);
-    paintWho();
-    paintVerdict(L);
   };
   grid.addEventListener("pointerup", end);
   grid.addEventListener("pointercancel", end);
@@ -706,49 +779,52 @@ function save() {
   const state = K.$("#saveState");
   if (state) state.textContent = "Saving…";
   clearTimeout(saveT);
-  saveT = setTimeout(() => {
-    const slots = [...M.mine];
-    const mid = M.meeting.id;
-    saving = saving
-      .then(() => K.api(`/meetings/${mid}/people/${M.me.id}`, { method: "PUT", body: { token: M.me.token, slots } }))
-      .then(() => {
-        const me = M.people.find((p) => p.id === M.me.id);
-        if (me) me.slots = slots;
-        const s = K.$("#saveState");
-        if (s) s.textContent = "Saved.";
-        K.buzz(8);
-      })
-      .catch((err) => {
-        K.toast(err.message, { error: true });
-        const s = K.$("#saveState");
-        if (s) s.textContent = "Not saved — try again.";
-      });
-  }, 250);
+  saveT = setTimeout(flushSave, 300);
+}
+function flushSave() {
+  clearTimeout(saveT);
+  if (!M?.me) return;
+  const slots = [...M.mine.yes];
+  const maybe = [...M.mine.maybe];
+  const mid = M.meeting.id;
+  const me = M.me;
+  saving = saving
+    .then(() => K.api(`/meetings/${mid}/people/${me.id}`, { method: "PUT", body: { token: me.token, slots, maybe } }))
+    .then(() => {
+      const p = M.people.find((x) => x.id === me.id);
+      if (p) Object.assign(p, { slots, maybe });
+      const s = K.$("#saveState");
+      if (s) s.textContent = "Saved.";
+    })
+    .catch((err) => {
+      K.toast(err.message, { error: true });
+      const s = K.$("#saveState");
+      if (s) s.textContent = "Not saved — try again.";
+    });
 }
 
-function bindGroupGrid(wrap) {
-  const grid = wrap.querySelector(".mgrid");
+function bindGroupGrid(grid) {
   const focus = (cell) => {
     if (!cell || M.focus === cell.dataset.s) return;
-    grid.querySelector(".ms.focus")?.classList.remove("focus");
+    grid.querySelector(".g-cell.focus")?.classList.remove("focus");
     cell.classList.add("focus");
     M.focus = cell.dataset.s;
     paintWho();
   };
-  grid.addEventListener("pointerover", (e) => e.pointerType === "mouse" && focus(e.target.closest(".ms[data-s]")));
-  grid.addEventListener("click", (e) => focus(e.target.closest(".ms[data-s]")));
+  grid.addEventListener("pointerover", (e) => e.pointerType === "mouse" && focus(e.target.closest(".g-cell[data-s]")));
+  grid.addEventListener("click", (e) => focus(e.target.closest(".g-cell[data-s]")));
 }
 
 function describeSlot(slot) {
   const { meeting } = M;
+  const len = step();
   if (meeting.kind === "dates") {
-    const ms = Number(slot.slice(1)) * 60000;
-    const z = zoned(ms, M.tz);
+    const z = zoned(Number(slot.slice(1)) * 60000, M.tz);
     const d = K.parseDate(z.date);
-    return `${d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}, ${timeLabel(z.minute)}–${timeLabel(z.minute + 15)}`;
+    return `${d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}, ${timeLabel(z.minute)}–${timeLabel(z.minute + len)}`;
   }
   const [d, mm] = slot.slice(1).split(":").map(Number);
-  return `${DOW_LONG[d]}, ${timeLabel(mm)}–${timeLabel(mm + 15)}`;
+  return `${DOW_LONG[d]}, ${timeLabel(mm)}–${timeLabel(mm + len)}`;
 }
 
 function paintWho() {
@@ -756,48 +832,57 @@ function paintWho() {
   const el = $("#who");
   if (!el) return;
   const n = M.people.length;
+  if (M.editing || !n) return void (el.hidden = true);
+  el.hidden = false;
   if (!M.focus) {
-    el.innerHTML = `<p class="who-hint">${n ? "Hover over (or tap) the group grid to see who’s available." : "No one has added their availability yet."}</p>`;
+    el.innerHTML = `<p class="mtg-side-note">Hover over or tap a time in the grid to see who can make it.</p>`;
     return;
   }
-  const avail = [];
-  const not = [];
-  for (const p of M.people) ((p.id === M.me?.id ? M.mine : new Set(p.slots)).has(M.focus) ? avail : not).push(p.name);
+  const yes = [];
+  const maybe = [];
+  const no = [];
+  for (const p of M.people) {
+    const st = setsOf(p);
+    (st.yes.has(M.focus) ? yes : st.maybe.has(M.focus) ? maybe : no).push(p.name);
+  }
+  const list = (names) => names.map((x) => `<li>${avatar(x, "sm")}<span>${esc(x)}</span></li>`).join("");
   el.innerHTML = `
-    <div class="who-head"><b>${avail.length}/${n} available</b><span>${esc(describeSlot(M.focus))}</span></div>
-    <div class="who-cols">
-      <div><h4><span class="swatch yes"></span>Available</h4>${avail.map((x) => `<div class="name-chip">${avatar(x, "sm")} ${esc(x)}</div>`).join("") || '<p class="who-none">No one</p>'}</div>
-      <div><h4><span class="swatch erase"></span>Unavailable</h4>${not.map((x) => `<div class="name-chip">${avatar(x, "sm")} ${esc(x)}</div>`).join("") || '<p class="who-none">No one</p>'}</div>
-    </div>`;
+    <div class="who-head"><b>${esc(describeSlot(M.focus))}</b><span>${yes.length} of ${n} available${maybe.length ? ` · ${maybe.length} if needed` : ""}</span></div>
+    ${yes.length ? `<h4><span class="sw yes"></span>Available</h4><ul class="who-list">${list(yes)}</ul>` : ""}
+    ${maybe.length ? `<h4><span class="sw maybe"></span>If needed</h4><ul class="who-list">${list(maybe)}</ul>` : ""}
+    ${no.length ? `<h4><span class="sw none"></span>Unavailable</h4><ul class="who-list dim">${list(no)}</ul>` : ""}`;
 }
 
-/** "Best time so far": the longest run of slots where the most people are free. */
-function paintVerdict(L) {
+/** "Best time so far": the longest stretch where the most people are free (if-needed counts half). */
+function paintBest(L) {
   const { $, esc, icon } = K;
-  const el = $("#meetVerdict");
-  const n = M.people.length;
+  const el = $("#mtgBest");
   if (!el) return;
-  if (!n) return void (el.innerHTML = "");
-  const count = (slot) => M.people.reduce((k, p) => k + ((p.id === M.me?.id ? M.mine : new Set(p.slots)).has(slot) ? 1 : 0), 0);
+  const n = M.people.length;
+  if (!n || M.editing) return void (el.innerHTML = "");
+  const len = step();
   let best = null;
+  const better = (a) => !best || a.k > best.k || (a.k === best.k && a.end - a.start > best.end - best.start);
   for (const c of L.columns) {
     let run = null;
     for (const minute of L.rows) {
       const slot = c.cells.get(minute);
-      const k = slot ? count(slot) : 0;
-      if (k && run && run.k === k && run.end === minute) run.end = minute + 15;
+      const k = slot ? score(slot) : 0;
+      if (k && run && run.k === k && run.end === minute) run.end = minute + len;
       else {
-        if (run && (!best || run.k > best.k || (run.k === best.k && run.end - run.start > best.end - best.start))) best = run;
-        run = k ? { k, start: minute, end: minute + 15, col: c } : null;
+        if (run && better(run)) best = run;
+        run = k ? { k, start: minute, end: minute + len, col: c, slot } : null;
       }
     }
-    if (run && (!best || run.k > best.k || (run.k === best.k && run.end - run.start > best.end - best.start))) best = run;
+    if (run && better(run)) best = run;
   }
   if (!best) return void (el.innerHTML = "");
-  el.innerHTML = `<div class="card verdict">
-    <div class="verdict-label">${icon("clock")} Best time so far</div>
-    <div class="verdict-date">${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</div>
-    <div class="verdict-sub"><b>${best.k} of ${n}</b> available</div>
-    <div class="verdict-meter" aria-hidden="true"><i style="width:${Math.round((best.k / n) * 100)}%"></i></div>
+  let yes = 0;
+  for (const p of M.people) if (setsOf(p).yes.has(best.slot)) yes += 1;
+  el.innerHTML = `<div class="card best-time">
+    <span class="best-ico">${icon("clock")}</span>
+    <div><span class="best-label">Best time so far</span>
+    <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b>
+    <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} if needed` : ""}</span></div>
   </div>`;
 }

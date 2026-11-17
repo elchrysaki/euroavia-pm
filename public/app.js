@@ -813,40 +813,107 @@ window.addEventListener("popstate", () => route()); // looked up at call time: r
 
 let route = function route() {
   closeSheet(true);
+  closeMenu();
   $(".flow")?.remove();
   $(".dp-wrap")?.remove();
   document.body.classList.remove("selecting");
   document.body.style.overflow = "";
   navActions.innerHTML = "";
   window.scrollTo(0, 0);
-  // trip pages have their own bottom action bar on phones: the tab bar steps aside there
-  document.body.classList.toggle("trip-page", /^\/(e|created)\//.test(location.pathname));
-  const m = location.pathname.match(/^\/e\/([A-Za-z0-9]{6,16})\/?$/);
+  const p = location.pathname;
+  // trip pages have their own bottom action bar on phones
+  document.body.classList.toggle("trip-page", /^\/(e|created)\//.test(p));
+  setNav(/^\/dashboard\/?$/.test(p) ? "dashboard" : /^\/join\/?$/.test(p) ? "join" : null);
+  const m = p.match(/^\/e\/([A-Za-z0-9]{6,16})\/?$/);
   if (m) return renderEvent(m[1]);
-  const c = location.pathname.match(/^\/created\/([A-Za-z0-9]{6,16})\/?$/);
+  const c = p.match(/^\/created\/([A-Za-z0-9]{6,16})\/?$/);
   if (c) return renderCreated(c[1]);
-  const mt = location.pathname.match(/^\/m\/([A-Za-z0-9]{6,16})\/?$/);
+  const mt = p.match(/^\/m\/([A-Za-z0-9]{6,16})\/?$/);
   if (mt) return meetModule().then((x) => x.renderMeeting(mt[1]));
-  if (/^\/meet\/?$/.test(location.pathname)) return meetModule().then((x) => x.renderMeetCreate());
-  if (/^\/plan\/?$/.test(location.pathname)) return setTab(null), renderHome();
-  if (/^\/new\/?$/.test(location.pathname)) return setTab("new"), renderHub();
-  if (/^\/dashboard\/?$/.test(location.pathname) || (location.pathname === "/" && myItems().length)) return setTab("dashboard"), renderDashboard();
-  return setTab("new"), renderHub();
-}
+  if (/^\/meet\/?$/.test(p)) return meetModule().then((x) => x.renderMeetCreate());
+  if (/^\/plan\/?$/.test(p)) return renderHome();
+  if (/^\/dashboard\/?$/.test(p)) return renderDashboard();
+  if (/^\/join\/?$/.test(p)) return renderJoin();
+  renderLanding();
+  if (/^\/new\/?$/.test(p)) openNewEvent();
+};
 
-/* Tab bar (like Blitz): Dashboard / Create new. In the navbar on wide screens, at the bottom on phones. */
-function setTab(name) {
-  document.querySelectorAll("#tabbar [data-tab]").forEach((a) => {
+/* ---- header bar (like Blitz): the page you're on gets the faded pill ---- */
+function setNav(name) {
+  $$("#navbar [data-tab]").forEach((a) => {
+    a.classList.toggle("on", a.dataset.tab === name);
     if (a.dataset.tab === name) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
 }
 
-/** Everything this device has created or opened, newest first. */
+/** "+ New event": choose a trip (days) or a meeting (hours). */
+function openNewEvent() {
+  closeMenu();
+  openSheet(`
+    <div class="sheet-head"><div><h2>New event</h2><div class="sheet-sub">What are you planning?</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    <div class="choose">
+      <a class="choose-opt" href="/plan" data-link>
+        <span class="choose-ico">${icon("calendar")}</span>
+        <span class="choose-text"><b>Trip days</b><span>Find the days that work over the coming months, then vote on places and activities.</span></span>
+        <span class="choose-go" aria-hidden="true">›</span>
+      </a>
+      <a class="choose-opt" href="/meet" data-link>
+        <span class="choose-ico">${icon("clock")}</span>
+        <span class="choose-text"><b>Meeting times</b><span>Find the hour that works on a few dates, in everyone’s own time zone.</span></span>
+        <span class="choose-go" aria-hidden="true">›</span>
+      </a>
+    </div>`);
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-new]")) {
+    e.preventDefault();
+    openNewEvent();
+  }
+});
+
+/* ---- phone menu: the header's links fold into ☰ ---- */
+let menuEl = null;
+function closeMenu() {
+  if (!menuEl) return;
+  menuEl.remove();
+  menuEl = null;
+  $("#navbar .menu-btn")?.setAttribute("aria-expanded", "false");
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("#navbar .menu-btn");
+  if (btn) {
+    if (menuEl) return closeMenu();
+    menuEl = document.createElement("nav");
+    menuEl.className = "menu-pop";
+    menuEl.setAttribute("aria-label", "Menu");
+    const here = location.pathname;
+    menuEl.innerHTML = `
+      <a class="menu-item ${here === "/dashboard" ? "on" : ""}" href="/dashboard" data-link><b>Dashboard</b><small>Your plans and what you viewed</small></a>
+      <a class="menu-item ${here === "/join" ? "on" : ""}" href="/join" data-link><b>Join with PIN</b><small>Open a plan from its 6-digit PIN</small></a>
+      <button type="button" class="btn btn-primary btn-block" data-new>${icon("plus")} New event</button>`;
+    document.body.append(menuEl);
+    btn.setAttribute("aria-expanded", "true");
+    return;
+  }
+  if (menuEl && !menuEl.contains(e.target)) closeMenu();
+});
+
+/** 482913 → "482 913" */
+const pinText = (id) => (/^\d{6}$/.test(id) ? `${id.slice(0, 3)} ${id.slice(3)}` : id);
+
+/** Remember what was opened, for the dashboard's "Recently viewed". */
+function markViewed(kind, id, title) {
+  const list = store.get("wingman:viewed", []).filter((x) => !(x.kind === kind && x.id === id));
+  list.unshift({ kind, id, title, at: Date.now() });
+  store.set("wingman:viewed", list.slice(0, 12));
+}
+
+/** Everything this device has created or opened. */
 function myItems() {
   return [
-    ...store.get("convene:events", []).map((e) => ({ kind: "trip", id: e.id, title: e.title, href: `/e/${e.id}`, sub: e.start ? fmtRange(e.start, e.end) : e.year || "" })),
-    ...store.get("wingman:meets", []).map((m) => ({ kind: "meet", id: m.id, title: m.title, href: `/m/${m.id}`, sub: m.kind === "week" ? "Weekly" : "" })),
+    ...store.get("convene:events", []).map((e) => ({ kind: "trip", id: e.id, title: e.title, href: `/e/${e.id}`, sub: e.start ? fmtRange(e.start, e.end) : e.year || "", mine: !!e.mine })),
+    ...store.get("wingman:meets", []).map((m) => ({ kind: "meet", id: m.id, title: m.title, href: `/m/${m.id}`, sub: "", mine: !!m.mine })),
   ];
 }
 
@@ -855,7 +922,7 @@ let meetPromise = null;
 function meetModule() {
   app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   meetPromise ||= import("/meet.js?v=" + ((document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1] || "1")).then((m) => {
-    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion });
+    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet });
     return m;
   });
   return meetPromise.catch((err) => {
@@ -865,77 +932,223 @@ function meetModule() {
   });
 }
 
+/** Join by PIN: look the number up and open the trip or meeting. */
+async function joinPin(raw) {
+  const pin = String(raw || "").replace(/\D/g, "");
+  if (pin.length !== 6) return toast("A PIN has 6 digits", { error: true });
+  try {
+    const r = await api(`/pin/${pin}`);
+    navigate(r.kind === "trip" ? `/e/${r.id}` : `/m/${r.id}`);
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+}
+const pinForm = (id, big = false) => `
+  <form class="pinform${big ? " big" : ""}" id="${id}" autocomplete="off">
+    <input name="pin" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="Event PIN" aria-label="Event PIN" />
+    <button class="btn">Join</button>
+  </form>`;
+function bindPinForm(id) {
+  const f = document.getElementById(id);
+  if (!f) return;
+  const input = f.pin;
+  input.addEventListener("input", () => {
+    const d = input.value.replace(/\D/g, "").slice(0, 6);
+    input.value = d.length > 3 ? `${d.slice(0, 3)} ${d.slice(3)}` : d;
+  });
+  f.addEventListener("submit", (e) => {
+    e.preventDefault();
+    joinPin(input.value);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Home: Wingman (like Blitz's home)                                    */
+/* ------------------------------------------------------------------ */
+
+function renderLanding() {
+  document.title = "Wingman — plan it together";
+  // "See it in action": small live pieces of the real screens
+  const heat = Array.from({ length: 35 }, (_, i) => {
+    const a = i < 31 ? [0, 0.15, 0.3, 0.55, 0.8, 1][Math.floor(Math.abs(Math.sin(i * 1.7 + 0.4)) * 6)] : 0;
+    return i < 31 ? `<span class="${a ? "h" : ""}" style="--t:${a}">${i + 1}</span>` : "<span class=\"none\"></span>";
+  }).join("");
+  const rows = ["9:00", "9:30", "10:00", "10:30", "11:00", "11:30"];
+  const times = rows
+    .map(
+      (t, r) =>
+        `<span class="tm">${t}</span>${[0, 1, 2, 3, 4]
+          .map((c) => {
+            const v = Math.max(0, Math.min(1, Math.sin((r + 1) * 0.6) * Math.cos((c - 2) * 0.7) * 1.2));
+            return `<span class="${v > 0.08 ? "h" : ""}" style="--t:${v.toFixed(2)}"></span>`;
+          })
+          .join("")}`,
+    )
+    .join("");
+  const places = [
+    ["Lisbon", 7],
+    ["Athens", 5],
+    ["Copenhagen", 3],
+  ];
+  app.innerHTML = `
+    <section class="land-hero">
+      <p class="eyebrow">Group planning · no accounts</p>
+      <h1 class="mega">Make your<br/><span class="shine">timeline.</span></h1>
+      <p class="lede">Find the days for a trip or the hour for a meeting. Share one link or a 6-digit PIN, and watch everyone’s free time line up.</p>
+      <div class="cta">
+        <button type="button" class="btn btn-primary btn-lg" data-new>Create an event <span aria-hidden="true">→</span></button>
+        ${pinForm("landPin")}
+      </div>
+    </section>
+
+    <section class="showcase">
+      <p class="eyebrow">See it in action</p>
+      <h2 class="display">Everyone marks their time. The overlap lights up.</h2>
+      <div class="shots">
+        <figure class="shot card">
+          <div class="shot-head"><span class="shot-tag">Trip days</span><span class="shot-sub">8 people</span></div>
+          <div class="mini-month" aria-hidden="true"><b>July</b><div class="mm-grid">${heat}</div></div>
+          <figcaption>The darker the day, the more people can come. Tap one to see who.</figcaption>
+        </figure>
+        <figure class="shot card">
+          <div class="shot-head"><span class="shot-tag">Meeting times</span><span class="shot-sub">Your time zone</span></div>
+          <div class="mini-times" aria-hidden="true"><span></span>${["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) => `<span class="dh">${d}</span>`).join("")}${times}</div>
+          <figcaption>Drag across the half hours you’re free. Everyone sees them in their own time zone.</figcaption>
+        </figure>
+        <figure class="shot card">
+          <div class="shot-head"><span class="shot-tag">Places</span><span class="shot-sub">Vote with one tap</span></div>
+          <ol class="mini-board" aria-hidden="true">${places
+            .map(([n, v], i) => `<li><span class="mb-rank">${i + 1}</span><span class="mb-name">${n}</span><span class="mb-bar"><i style="width:${(v / 7) * 100}%"></i></span><b>${v}</b></li>`)
+            .join("")}</ol>
+          <figcaption>Suggest places and activities, like the ones you love, and see what the group picks.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="steps">
+      <article><span>01</span><h3>Create</h3><p>Pick trip days or meeting times, then choose the dates to ask about.</p></article>
+      <article><span>02</span><h3>Share</h3><p>Send the link, or the 6-digit PIN. People join with just their name.</p></article>
+      <article><span>03</span><h3>Decide</h3><p>See the best day or hour at a glance, and who can make it.</p></article>
+    </section>`;
+  bindPinForm("landPin");
+}
+
+/* ------------------------------------------------------------------ */
+/* Join with PIN                                                        */
+/* ------------------------------------------------------------------ */
+
+function renderJoin() {
+  document.title = "Join with PIN — Wingman";
+  app.innerHTML = `
+    <section class="join-page">
+      <p class="eyebrow">Join an event</p>
+      <h1 class="display">Enter the PIN.</h1>
+      <p class="lede">Every trip and meeting has a 6-digit PIN. Type it to open it, no account needed.</p>
+      ${pinForm("joinPin", true)}
+    </section>`;
+  bindPinForm("joinPin");
+  const pin = new URLSearchParams(location.search).get("pin");
+  if (pin) joinPin(pin);
+  else setTimeout(() => $("#joinPin input")?.focus(), 50);
+}
+
 /* ------------------------------------------------------------------ */
 /* Dashboard                                                           */
 /* ------------------------------------------------------------------ */
 
+const ago = (t) => {
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  const d = Math.floor(s / 86400);
+  if (d === 1) return "yesterday";
+  if (d < 7) return `${d} days ago`;
+  return new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+};
+
 async function renderDashboard() {
   document.title = "Dashboard — Wingman";
   const items = myItems();
+  const trips = items.filter((x) => x.kind === "trip");
+  const meets = items.filter((x) => x.kind === "meet");
+  const viewed = store.get("wingman:viewed", []).slice(0, 4);
+  const first = (store.get("convene:name", "") || "").split(" ")[0];
+  const row = (it) => `
+    <a class="plan-row" href="${esc(it.href)}" data-link data-id="${esc(it.id)}" data-kind="${it.kind}">
+      <span class="plan-ico ${it.kind}">${icon(it.kind === "trip" ? "calendar" : "clock")}</span>
+      <span class="plan-main"><b>${esc(it.title)}</b><small data-sub>${esc(it.sub || "Loading…")}</small></span>
+      ${/^\d{6}$/.test(it.id) ? `<span class="plan-pin">PIN ${esc(pinText(it.id))}</span>` : ""}
+      <span class="plan-count" data-count>–</span>
+    </a>`;
+  const section = (title, list, empty) => `
+    <section class="dash-sec">
+      <div class="sec-head"><h2>${title}</h2><span class="sec-n">${list.length || ""}</span></div>
+      ${list.length ? `<div class="card plan-list">${list.map(row).join("")}</div>` : `<div class="card dash-empty"><p>${empty}</p></div>`}
+    </section>`;
   app.innerHTML = `
-    <section class="dash-head">
-      <p class="eyebrow fade-in">${icon("grid")} Dashboard</p>
-      <h1 class="hub-title fade-in d1">Your plans.</h1>
-      <div class="dash-stats fade-in d1">
-        <div><b id="stPlans">${items.length}</b><span>Active plans</span></div>
-        <div><b id="stPeople">–</b><span>People answered</span></div>
-        <div><b id="stNew">–</b><span>Busiest plan</span></div>
-      </div>
-    </section>
-    ${
-      items.length
-        ? `<div class="dash-list">${items
+    <div class="dash">
+      <div class="dash-main">
+        <p class="eyebrow">Dashboard</p>
+        <h1 class="display">Welcome back${first ? `, ${esc(first)}` : ""}.</h1>
+        <p class="lede">${items.length ? `You have ${items.length} ${items.length === 1 ? "plan" : "plans"} on this device.` : "Plans you create or open on this device show up here."}</p>
+        ${
+          viewed.length
+            ? `<section class="dash-sec">
+          <div class="sec-head"><h2>Recently viewed</h2></div>
+          <div class="recent-grid">${viewed
             .map(
-              (it, i) => `<a class="dash-card card fade-in" style="animation-delay:${Math.min(i, 8) * 40}ms" href="${esc(it.href)}" data-link data-id="${esc(it.id)}">
-              <span class="dash-ico ${it.kind}">${icon(it.kind === "trip" ? "calendar" : "clock")}</span>
-              <span class="dash-main">
-                <span class="dash-kind">${it.kind === "trip" ? "Trip days" : "Meeting times"}</span>
-                <b class="dash-title">${esc(it.title)}</b>
-                <span class="dash-sub" data-sub>${esc(it.sub || "Loading…")}</span>
-              </span>
-              <span class="dash-count" data-count><b>–</b><span>people</span></span>
-            </a>`,
+              (v) => `<a class="card recent" href="${v.kind === "trip" ? "/e/" : "/m/"}${esc(v.id)}" data-link>
+                <span class="plan-ico ${v.kind}">${icon(v.kind === "trip" ? "calendar" : "clock")}</span>
+                <b>${esc(v.title)}</b><small>${v.kind === "trip" ? "Trip days" : "Meeting times"} · ${esc(ago(v.at))}</small></a>`,
             )
-            .join("")}</div>`
-        : `<div class="empty card" style="margin-top:1.5rem"><div class="glyph">${icon("sparkles")}</div><h3>Nothing here yet</h3><p>Plans you create or open on this device show up here.</p><a class="btn btn-primary" href="/new" data-link style="margin-top:0.75rem">${icon("plus")} Create new</a></div>`
-    }
-    ${items.length ? `<a class="btn btn-primary dash-new fade-in d2" href="/new" data-link>${icon("plus")} Create new</a>` : ""}`;
-  if (!items.length) return;
+            .join("")}</div>
+        </section>`
+            : ""
+        }
+        ${section("Your meetings", meets, "No meetings yet. Create one to find the hour that works.")}
+        ${section("Your trips", trips, "No trips yet. Create one to find the days that work.")}
+      </div>
+      <aside class="dash-aside">
+        <div class="card aside-card">
+          <h2>Create a new event</h2>
+          <p>What are you planning?</p>
+          <a class="btn btn-primary btn-block" href="/plan" data-link>${icon("calendar")} Trip days</a>
+          <a class="btn btn-block" href="/meet" data-link>${icon("clock")} Meeting times</a>
+        </div>
+        <div class="card aside-card">
+          <h2>Join with PIN</h2>
+          <p>Got a 6-digit PIN from someone?</p>
+          ${pinForm("dashPin")}
+        </div>
+      </aside>
+    </div>`;
+  bindPinForm("dashPin");
 
-  let people = 0;
-  let busiest = null;
   await Promise.all(
     items.map(async (it) => {
-      const card = app.querySelector(`.dash-card[data-id="${CSS.escape(it.id)}"]`);
+      const el = () => app.querySelector(`.plan-row[data-kind="${it.kind}"][data-id="${CSS.escape(it.id)}"]`);
       try {
         const d = await api(it.kind === "trip" ? `/events/${it.id}` : `/meetings/${it.id}`);
-        const list = it.kind === "trip" ? d.responses : d.people;
-        const n = list.length;
-        people += n;
-        if (!busiest || n > busiest.n) busiest = { n, title: it.title };
-        if (!card) return;
-        card.querySelector("[data-count] b").textContent = n;
-        card.querySelector("[data-count] span").textContent = n === 1 ? "person" : "people";
-        card.querySelector("[data-sub]").textContent = it.kind === "trip" ? tripLine(d, n) : meetLine(d, n);
+        const n = (it.kind === "trip" ? d.responses : d.people).length;
+        const r = el();
+        if (!r) return;
+        r.querySelector("[data-count]").textContent = `${n} ${n === 1 ? "person" : "people"}`;
+        r.querySelector("[data-sub]").textContent = it.kind === "trip" ? tripLine(d, n) : meetLine(d, n);
       } catch (err) {
-        // gone (expired) or offline: say so, and forget it if the server no longer has it
-        if (card) {
-          card.classList.add("gone");
-          card.querySelector("[data-sub]").textContent = /exist|removed|not found/i.test(err.message) ? "No longer available" : "Couldn’t refresh";
+        const gone = /exist|removed|not found/i.test(err.message);
+        const r = el();
+        if (r) {
+          r.classList.add("gone");
+          r.querySelector("[data-sub]").textContent = gone ? "No longer available" : "Couldn’t refresh";
         }
-        if (/exist|removed|not found/i.test(err.message)) {
+        if (gone) {
           const key = it.kind === "trip" ? "convene:events" : "wingman:meets";
           store.set(key, store.get(key, []).filter((x) => x.id !== it.id));
         }
       }
     }),
   );
-  const st = (id, v) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = v;
-  };
-  st("stPeople", people);
-  st("stNew", busiest && busiest.n ? busiest.title : "–");
 }
 
 function tripLine(d, n) {
@@ -956,49 +1169,6 @@ function meetLine(d, n) {
   for (const p of d.people) for (const s of p.slots) count.set(s, (count.get(s) || 0) + 1);
   const max = Math.max(0, ...count.values());
   return max ? `Up to ${max} of ${n} free at the same time` : "No times marked yet";
-}
-
-/* ------------------------------------------------------------------ */
-/* Hub: Wingman Tools                                                  */
-/* ------------------------------------------------------------------ */
-
-function renderHub() {
-  document.title = "Wingman Tools";
-  const heat = Array.from({ length: 35 }, (_, i) => {
-    const a = [0.08, 0.15, 0.3, 0.55, 0.85, 1][Math.floor(Math.abs(Math.sin(i * 1.7 + 0.4)) * 6)];
-    return `<span style="--a:${a};--d:${(i % 7) * 0.18}s"></span>`;
-  }).join("");
-  const grid = Array.from({ length: 5 * 8 }, (_, i) => {
-    const c = i % 5;
-    const r = Math.floor(i / 5);
-    const a = Math.max(0.06, Math.min(1, Math.sin((r + 1) * 0.55) * Math.cos((c - 2) * 0.6) * 1.15));
-    return `<span style="--a:${a.toFixed(2)};--d:${((r + c) % 6) * 0.2}s"></span>`;
-  }).join("");
-  app.innerHTML = `
-    <section class="hub-hero">
-      <p class="eyebrow fade-in">${icon("plane")} Wingman Tools</p>
-      <h1 class="hub-title fade-in d1">Plan it together.<br/><span class="shine">No accounts.</span></h1>
-      <p class="subtitle fade-in d1">Two tools for getting a group to agree. Create one, share the link, and watch the answers come in.</p>
-    </section>
-    <div class="hub-tools">
-      <a class="tool-card card faceplate fade-in d2" href="/plan" data-link>
-        <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
-        <span class="shot-tag">01 · Trip days</span>
-        <div class="tool-preview"><div class="mini-heat cal" aria-hidden="true">${heat}</div></div>
-        <h2>Find the days</h2>
-        <p>Mark the days you can travel over months, then vote on where to go and what to do.</p>
-        <span class="btn btn-primary btn-block">${icon("calendar")} Plan a trip</span>
-      </a>
-      <a class="tool-card card faceplate fade-in d2" href="/meet" data-link>
-        <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
-        <span class="shot-tag">02 · Meeting times</span>
-        <div class="tool-preview"><div class="mini-heat times" aria-hidden="true">${grid}</div></div>
-        <h2>Find the hour</h2>
-        <p>Pick dates up to 3 months ahead, then everyone drags across the 15-minute slots they’re free, in their own time zone.</p>
-        <span class="btn btn-primary btn-block">${icon("clock")} Schedule a meeting</span>
-      </a>
-    </div>
-    <p class="fineprint hub-fine">${icon("lock")}<span>Nothing to sign up for. Events are deleted a month after their last date, or after two months nobody opens them.</span></p>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1132,7 +1302,7 @@ function renderHome() {
         body: { title, description: form.description.value.trim(), start_date: range.start, end_date: range.end },
       });
       const list = store.get("convene:events", []).filter((x) => x.id !== id);
-      list.unshift({ id, title, start: range.start, end: range.end });
+      list.unshift({ id, title, start: range.start, end: range.end, mine: true });
       store.set("convene:events", list.slice(0, 20));
       navigate(`/created/${id}`);
     } catch (err) {
@@ -1196,7 +1366,7 @@ function renderCreated(id) {
 /* Event                                                               */
 /* ------------------------------------------------------------------ */
 
-let current = null; // { event, responses, agg, tab, selectMode, selected:Set }
+let current = null; // { event, responses, agg, tab, selectMode, selected:Set, filter: response id or null }
 
 const CACHE_LIMIT = 6;
 function cacheEvent(id, data) {
@@ -1245,7 +1415,8 @@ async function renderEvent(id, { keepTab = false, quiet = false } = {}) {
 }
 
 function paintEvent(data, prevTab, { quiet = false } = {}) {
-  current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set() };
+  const keepFilter = current?.event?.id === data.event.id ? current.filter : null;
+  current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set(), filter: keepFilter };
   app.classList.toggle("quiet", quiet); // in-place update (a vote, a like): no entrance animations
   const { event, responses } = data;
   document.title = `${event.title} — Wingman`;
@@ -1255,6 +1426,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     recent.unshift({ id: event.id, title: event.title, start: event.start_date, end: event.end_date });
     store.set("convene:events", recent.slice(0, 20));
   }
+  if (!quiet) markViewed("trip", event.id, event.title);
 
   const mine = store.get(`convene:resp:${event.id}`);
   const myResponse = mine && responses.find((r) => r.id === mine.id);
@@ -1270,7 +1442,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     <div class="event-layout">
       <aside class="event-aside">
         <div class="event-head pass-card fade-in">
-          <div class="pass-row"><span class="pass-airline">${icon("plane")} Wingman</span><span class="pass-code">Flight WM-${esc(event.id.slice(0, 4).toUpperCase())}</span></div>
+          <p class="eyebrow">Trip days${/^\d{6}$/.test(event.id) ? ` · PIN ${esc(pinText(event.id))}` : ""}</p>
           <h1 class="large-title">${esc(event.title)}</h1>
           ${event.description ? `<p class="subtitle">${esc(event.description)}</p>` : ""}
           <div class="route">
@@ -1278,15 +1450,14 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
             <span class="route-line" aria-hidden="true">${icon("plane")}</span>
             <div class="r"><small>Latest</small><b>${esc(fmtDate(eventRange(event).end, { day: "numeric", month: "short" }))}</b><span>${eventRange(event).end.slice(0, 4)}</span></div>
           </div>
-          <div class="pass-perf" aria-hidden="true"></div>
           <div class="event-meta">
             <span class="pill">${icon("people")} ${responses.length} ${responses.length === 1 ? "response" : "responses"}</span>
             <span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>
           </div>
           ${
             responses.length
-              ? `<div class="people-list"><div class="people-label">Who responded</div><div class="people-chips">${responses
-                  .map((r) => `<span class="person">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></span>`)
+              ? `<div class="people-list"><div class="people-label">Who responded · tap a name to see their days</div><div class="people-chips">${responses
+                  .map((r) => `<button type="button" class="person" data-filter="${esc(r.id)}" aria-pressed="false">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></button>`)
                   .join("")}</div></div>`
               : ""
           }
@@ -1317,6 +1488,21 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   });
   bindCalendar();
   bindQuickActions();
+  // tap a name: the calendar shows only that person's days (tap again for everyone)
+  $$("[data-filter]").forEach((b) =>
+    b.addEventListener("click", () => {
+      current.filter = current.filter === b.dataset.filter ? null : b.dataset.filter;
+      $$("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.filter === current.filter)));
+      if (current.tab !== "calendar") {
+        current.tab = "calendar";
+        $$('[data-seg="tabs"] button').forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.value === "calendar")));
+        window.dispatchEvent(new Event("resize"));
+      }
+      exitSelectMode();
+      renderTab();
+      if (current.filter && innerWidth < 900) $("#tabBody")?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+    }),
+  );
   $("#selClear").onclick = exitSelectMode;
   $("#selShow").onclick = () => current.selected.size && openDaySheet([...current.selected].sort());
   renderTab();
@@ -1353,6 +1539,20 @@ function calendarHtml() {
     return `<i style="--t:${t.toFixed(3)}" title="${people} of ${n}"></i>`;
   }).join("");
 
+  const who = current.filter && current.responses.find((r) => r.id === current.filter);
+  if (who) {
+    const yes = new Set(who.yes || []);
+    const maybe = new Set(who.maybe || []);
+    return `
+    <div class="filter-head card">
+      ${avatar(who.name)}
+      <div><b>${esc(who.name)}’s days</b><span>${yes.size} definitely · ${maybe.size} maybe</span></div>
+      <button type="button" class="btn btn-tinted" id="showAll">Show everyone</button>
+    </div>
+    <div class="cal-toolbar"><div class="legend"><span class="swatch yes"></span>Definitely <span class="swatch maybe"></span>Maybe</div></div>
+    ${monthsHtml(eventRange(event), (date) => (yes.has(date) ? { cls: "pyes", label: "definitely" } : maybe.has(date) ? { cls: "pmaybe", label: "maybe" } : {}))}`;
+  }
+
   if (!n) {
     return `<div class="card empty"><div class="glyph">${icon("calendar")}</div><h3>No one has responded yet</h3><p>Be the first — add your availability, then share the link with the group.</p></div>
       <div class="section-title">${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</div>
@@ -1360,14 +1560,6 @@ function calendarHtml() {
   }
 
   const top = best[0];
-  const flap = (d) =>
-    parseDate(d)
-      .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" })
-      .replace(",", "")
-      .toUpperCase()
-      .split(" ")
-      .map((w) => `<span>${esc(w)}</span>`)
-      .join("");
   return `
     ${
       top
@@ -1375,20 +1567,8 @@ function calendarHtml() {
         <div class="verdict-label">${icon("plane")} Best date so far</div>
         <div class="verdict-date">${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</div>
         <div class="verdict-sub"><b>${top.s.yes.length + top.s.maybe.length} of ${n}</b> can make it · ${top.s.yes.length} definitely</div>
-        <div class="verdict-meter" aria-hidden="true"><i style="width:${Math.round(((top.s.yes.length + top.s.maybe.length) / n) * 100)}%"></i></div>
         <button class="btn btn-tinted" data-best="${top.d}">See who’s in</button>
       </div>`
-        : ""
-    }
-    ${
-      best.length > 1
-        ? `<div class="section-header">Next best</div>
-      <div class="best">${best
-        .slice(1)
-        .map(
-          (b, i) => `<button class="best-card" data-best="${b.d}"><div class="rank">#${i + 2}</div><div class="date flap">${flap(b.d)}</div><div class="counts">${b.s.yes.length + b.s.maybe.length}/${n} · ${b.s.yes.length} definitely</div></button>`,
-        )
-        .join("")}</div>`
         : ""
     }
     <div class="cal-toolbar">
@@ -1413,6 +1593,11 @@ function bindCalendar() {
   body.addEventListener("click", (e) => {
     const best = e.target.closest("[data-best]");
     if (best) return openDaySheet([best.dataset.best]);
+    if (e.target.closest("#showAll")) {
+      current.filter = null;
+      $$("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", "false"));
+      return renderTab();
+    }
     if (e.target.closest("#selectToggle")) {
       current.selectMode ? exitSelectMode() : enterSelectMode();
       return;
@@ -1512,18 +1697,18 @@ function destinationsHtml() {
   if (!destinations.length)
     return `${addForm}<div class="card empty"><div class="glyph">${icon("pin")}</div><h3>No places yet</h3><p>Suggest the first one above.</p></div>`;
   const top = destinations[0].voters.length;
-  return `${addForm}<div class="board">${destinations
+  return `${addForm}<div class="card place-list">${destinations
     .map((d, i) => {
       const acts = current.agg.activities.filter((a) => a.destination && a.destination.toLowerCase() === d.name.toLowerCase()).length;
       const voted = myPlaces.has(d.name.toLowerCase());
-      return `<div class="card board-item" style="animation:rise .6s var(--ease) both;animation-delay:${i * 60}ms">
-        <div class="medal">${i + 1}</div>
-        <div><h4>${esc(d.name)}</h4><div class="sub">${esc(d.voters.join(", "))}${acts ? ` · ${acts} ${acts === 1 ? "activity" : "activities"}` : ""}</div></div>
-        <div class="vote-col">
-          <div class="votes">${d.voters.length}<small>${d.voters.length === 1 ? "vote" : "votes"}</small></div>
-          <button type="button" class="like-btn vote-btn" data-vote="${esc(d.name)}" aria-pressed="${voted}">${icon(voted ? "check" : "plus")} ${voted ? "Voted" : "Vote"}</button>
+      return `<div class="place-row">
+        <span class="place-rank${i === 0 ? " first" : ""}">${i + 1}</span>
+        <div class="place-main">
+          <b>${esc(d.name)}</b>
+          <span>${esc(d.voters.join(", "))}${acts ? ` · ${acts} ${acts === 1 ? "activity" : "activities"}` : ""}</span>
+          <span class="place-bar"><i style="width:${Math.max(4, (d.voters.length / Math.max(top, n || 1)) * 100)}%"></i></span>
         </div>
-        <div class="bar"><i style="width:${Math.max(6, (d.voters.length / Math.max(top, n || 1)) * 100)}%;animation-delay:${i * 60 + 150}ms"></i></div>
+        <button type="button" class="like-btn vote-btn" data-vote="${esc(d.name)}" aria-pressed="${voted}" aria-label="${voted ? "Remove your vote for" : "Vote for"} ${esc(d.name)}">${icon(voted ? "check" : "thumb")} ${d.voters.length}</button>
       </div>`;
     })
     .join("")}</div>`;
