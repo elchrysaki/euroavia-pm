@@ -199,7 +199,7 @@ async function handleApi(request, env, url) {
   // POST /api/events
   if (parts.length === 1 && parts[0] === "events" && method === "POST") {
     const body = await readBody(request);
-    if (!body) return fail("Invalid request.");
+    if (!body) return fail("That didn’t come through. Please try again.");
     const title = cleanText(body.title, LIMITS.title);
     const description = cleanText(body.description, LIMITS.description);
     if (!title) return fail("Please give your event a name.");
@@ -229,7 +229,7 @@ async function handleApi(request, env, url) {
   // GET /api/events/:id
   if (parts.length === 2 && method === "GET") {
     const event = await getEvent(env, eventId);
-    if (!event) return fail("This event doesn't exist or has been removed.", 404);
+    if (!event) return fail("This event doesn’t exist or has been removed.", 404);
     const { results } = await env.DB.prepare(
       "SELECT id, name, data, created_at, updated_at FROM responses WHERE event_id = ? ORDER BY created_at ASC",
     )
@@ -248,12 +248,12 @@ async function handleApi(request, env, url) {
   // POST /api/events/:id/responses
   if (parts.length === 3 && parts[2] === "responses" && method === "POST") {
     const event = await getEvent(env, eventId);
-    if (!event) return fail("This event doesn't exist or has been removed.", 404);
+    if (!event) return fail("This event doesn’t exist or has been removed.", 404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM responses WHERE event_id = ?").bind(eventId).first("n");
     if (count >= LIMITS.responsesPerEvent) return fail("This event is full.", 409);
 
     const body = await readBody(request);
-    if (!body) return fail("Invalid request.");
+    if (!body) return fail("That didn’t come through. Please try again.");
     const clean = sanitizeResponse(body, event);
     if (clean.error) return fail(clean.error);
 
@@ -271,9 +271,9 @@ async function handleApi(request, env, url) {
   // PUT /api/events/:id/responses/:rid  — edit your own response (token kept on your device)
   if (parts.length === 4 && parts[2] === "responses" && method === "PUT") {
     const event = await getEvent(env, eventId);
-    if (!event) return fail("This event doesn't exist or has been removed.", 404);
+    if (!event) return fail("This event doesn’t exist or has been removed.", 404);
     const body = await readBody(request);
-    if (!body || typeof body.token !== "string") return fail("Invalid request.");
+    if (!body || typeof body.token !== "string") return fail("That didn’t come through. Please try again.");
     const existing = await env.DB.prepare("SELECT token FROM responses WHERE id = ? AND event_id = ?")
       .bind(parts[3], eventId)
       .first();

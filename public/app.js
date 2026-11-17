@@ -69,8 +69,8 @@ function remember(mode, stats) {
 }
 
 /**
- * Records ~frames of rendering. Judges smoothness against the screen's own pace (its fastest
- * steady frames), so a phone capped at 30fps by Low Power Mode isn't mistaken for a struggling one.
+ * Records ~frames of rendering. Judges smoothness against the screen’s own pace (its fastest
+ * steady frames), so a phone capped at 30fps by Low Power Mode isn’t mistaken for a struggling one.
  */
 function sampleFrames(frames) {
   return new Promise((resolve) => {
@@ -82,7 +82,7 @@ function sampleFrames(frames) {
       last = t;
       if (deltas.length < frames) return void requestAnimationFrame(step);
       const sorted = [...deltas].sort((a, b) => a - b);
-      const pace = sorted[Math.floor(sorted.length * 0.1)]; // the display's natural frame interval
+      const pace = sorted[Math.floor(sorted.length * 0.1)]; // the display’s natural frame interval
       const dropped = deltas.filter((d) => d > pace * 1.6).length / deltas.length; // frames that missed it
       resolve({ median: sorted[sorted.length >> 1], pace, janky: dropped, struggling: dropped > 0.25 || sorted[sorted.length >> 1] > 45 });
     };
@@ -413,7 +413,7 @@ function spring({ from, to, velocity = 0, damping = 1, response = 0.35, epsilon 
   };
 }
 
-/** Apple's momentum projection: where a flick would come to rest. */
+/** Apple’s momentum projection: where a flick would come to rest. */
 const project = (velocity, rate = 0.998) => ((velocity / 1000) * rate) / (1 - rate);
 /** Progressive resistance past a boundary instead of a hard stop. */
 const rubberband = (over, dim, c = 0.55) => (over * dim * c) / (dim + c * Math.abs(over));
@@ -477,7 +477,7 @@ function attachPainter(root, st, onChange) {
     if (!start) return;
     if (!painting) {
       if (timer && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) {
-        clearTimeout(timer); // moved before the hold: it's a scroll
+        clearTimeout(timer); // moved before the hold: it’s a scroll
         timer = null;
         unpress();
         start = null;
@@ -658,7 +658,7 @@ function openDayPicker({ range, st, origin, focusDate, onChange, onClose }) {
     dp.style.transform = `translate3d(0, ${y}px, 0)`;
     scrim.style.opacity = String(t);
     if (parent && !perf.lite) parent.style.transform = `scale(${1 - 0.04 * t})`; // push the parent layer back
-    if (parent) parent.classList.toggle("pushed", t > 0.01); // its glass footer goes solid while it's behind the sheet
+    if (parent) parent.classList.toggle("pushed", t > 0.01); // its glass footer goes solid while it’s behind the sheet
   };
 
   const finish = () => {
@@ -843,10 +843,10 @@ function renderHome() {
     <div class="hero">
       <div>
         <h1 class="large-title fade-in">Find the days<br/>that <span class="shine">work for everyone.</span></h1>
-        <p class="subtitle fade-in d1">Create an event, share one link, and watch the calendar light up as people mark when they're free. Then vote on where to go and what to do.</p>
+        <p class="subtitle fade-in d1">Create an event, share one link, and watch the calendar light up as people mark when they’re free. Then vote on where to go and what to do.</p>
         <ul class="feature-list fade-in d2">
           <li><span class="feature-icon">${icon("calendar")}</span><div><b>Any window you like</b>The next few months, a whole year, or exact dates. Darker days mean more people can make it.</div></li>
-          <li><span class="feature-icon">${icon("pin")}</span><div><b>Destination leaderboard</b>Everyone suggests places; the favourites rise to the top.</div></li>
+          <li><span class="feature-icon">${icon("pin")}</span><div><b>Places leaderboard</b>Everyone suggests places; the favourites rise to the top.</div></li>
           <li><span class="feature-icon">${icon("lock")}</span><div><b>No accounts, no logins</b>Just a name and a few taps.</div></li>
         </ul>
       </div>
@@ -855,10 +855,10 @@ function renderHome() {
         <div class="card pad faceplate">
           <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
           <div class="mini-heat" aria-hidden="true">${heat}</div>
-          <div class="section-header" style="margin-top:22px">New event</div>
+          <div class="section-header" style="margin-top:1.375rem">New event</div>
           <div class="group well">
             <div class="row"><label for="title">Name</label><input id="title" name="title" maxlength="80" placeholder="Summer trip 2027" required /></div>
-            <div class="row"><label for="desc">Notes</label><textarea id="desc" name="description" maxlength="400" placeholder="Optional — what's the plan?"></textarea></div>
+            <div class="row"><label for="desc">Notes</label><textarea id="desc" name="description" maxlength="400" placeholder="Optional — what’s the plan?"></textarea></div>
           </div>
           <div class="section-header">Dates to choose from</div>
           <div class="segmented year-pick" role="group" aria-label="Date range" data-seg="range">
@@ -869,18 +869,18 @@ function renderHome() {
             <button type="button" data-value="custom" aria-pressed="false">Custom</button>
           </div>
           <div class="range-custom" id="rangeCustom" hidden>
-            <div class="group well" style="margin-top:10px">
+            <div class="group well" style="margin-top:0.625rem">
               <div class="row"><label for="startDate">Starts</label><input type="date" id="startDate" min="${today}" value="${today}" /></div>
               <div class="row"><label for="endDate">Ends</label><input type="date" id="endDate" min="${today}" value="${addMonths(today, 6)}" /></div>
             </div>
-            <div class="chips" style="margin-top:10px">
+            <div class="chips" style="margin-top:0.625rem">
               <button type="button" class="btn btn-tinted" data-whole="${nextYear - 1}">Rest of ${nextYear - 1}</button>
               <button type="button" class="btn btn-tinted" data-whole="${nextYear}">All of ${nextYear}</button>
             </div>
           </div>
           <p class="range-summary" id="rangeSummary"></p>
-          <div style="margin-top:22px"><button class="btn btn-primary btn-block" type="submit" id="createBtn">${icon("sparkles")} Create event</button></div>
-          <p class="fineprint">${icon("lock")}<span>Once created, an event can't be edited or deleted — so everyone can trust the link they were sent.</span></p>
+          <div style="margin-top:1.375rem"><button class="btn btn-primary btn-block" type="submit" id="createBtn">${icon("sparkles")} Create event</button></div>
+          <p class="fineprint">${icon("lock")}<span>Once created, an event can’t be edited or deleted — so everyone can trust the link they were sent.</span></p>
         </div>
       </form>
     </div>
@@ -894,7 +894,7 @@ function renderHome() {
                (e) =>
                  `<a class="row" href="/e/${esc(e.id)}" data-link style="text-decoration:none;color:inherit"><span class="feature-icon" style="width:30px;height:30px">${icon(
                    "calendar",
-                 )}</span><span style="flex:1;font-weight:600">${esc(e.title)}</span><span style="color:var(--label-3);font-size:14px">${esc(e.start ? fmtRange(e.start, e.end) : e.year || "")}</span></a>`,
+                 )}</span><span style="flex:1;font-weight:600">${esc(e.title)}</span><span style="color:var(--label-3);font-size:0.8125rem">${esc(e.start ? fmtRange(e.start, e.end) : e.year || "")}</span></a>`,
              )
              .join("")}</div>`
         : ""
@@ -947,7 +947,7 @@ function renderHome() {
       return toast("Give your event a name", { error: true });
     }
     const range = currentRange();
-    if (!range.start || !range.end || range.end < range.start) return toast("Check the dates", { error: true });
+    if (!range.start || !range.end || range.end < range.start) return toast("The end date must be after the start date.", { error: true });
     if (daysInRange(range.start, range.end) > 731) return toast("Pick a range of up to two years", { error: true });
     btn.disabled = true;
     try {
@@ -997,7 +997,7 @@ function renderCreated(id) {
   app.innerHTML = `
     <div class="created">
       <div class="check-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-      <h1 class="large-title fade-in" style="font-size:clamp(30px,6vw,44px)">${esc(meta.title)}<br/><span class="shine">is live.</span></h1>
+      <h1 class="large-title fade-in" style="font-size:clamp(2.125rem,6vw,2.75rem)">${esc(meta.title)}<br/><span class="shine">is live.</span></h1>
       <p class="subtitle fade-in d1" style="margin:0 auto">Share this link with your group. Anyone who opens it can add their name and mark their days — no account needed.</p>
       <div class="link-field fade-in d2"><code>${esc(url)}</code><button class="btn btn-tinted" id="copyBtn">${icon("link")} Copy</button></div>
       <div class="stack two fade-in d3">
@@ -1051,17 +1051,17 @@ async function renderEvent(id, { keepTab = false, quiet = false } = {}) {
   try {
     data = await api(`/events/${id}`);
   } catch (err) {
-    if (cached) return toast("Can't reach the server — showing your saved copy", { error: true });
-    app.innerHTML = `<div class="empty card" style="margin-top:40px"><div class="glyph">${icon("calendar")}</div><h3>Event not found</h3><p>${esc(
+    if (cached) return toast("Can’t reach the server — showing your saved copy", { error: true });
+    app.innerHTML = `<div class="empty card" style="margin-top:2.5rem"><div class="glyph">${icon("calendar")}</div><h3>Event not found</h3><p>${esc(
       err.message,
-    )}</p><a class="btn btn-primary" href="/" data-link style="margin-top:12px">Create a new event</a></div>`;
+    )}</p><a class="btn btn-primary" href="/" data-link style="margin-top:0.75rem">Create a new event</a></div>`;
     return;
   }
   cacheEvent(id, data);
   if (location.pathname.replace(/\/$/, "") !== `/e/${id}`) return; // user navigated away meanwhile
   if (cached && JSON.stringify(cached) === JSON.stringify(data)) return;
   if (cached && ($(".flow") || $(".sheet-wrap"))) {
-    // don't yank the page from under an open sheet/flow; keep the fresh data for the next paint
+    // don’t yank the page from under an open sheet/flow; keep the fresh data for the next paint
     Object.assign(current, data, { agg: aggregate(data.responses) });
     return;
   }
@@ -1106,7 +1106,6 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
           <div class="event-meta">
             <span class="pill">${icon("people")} ${responses.length} ${responses.length === 1 ? "response" : "responses"}</span>
             <span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>
-            <span class="pill">${icon("lock")} Locked</span>
           </div>
           ${
             responses.length
@@ -1130,7 +1129,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
       </section>
     </div>
     <div class="action-bar" id="actionBar">${ctaHtml}</div>
-    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button><button class="btn btn-primary" id="selShow">Who's free?</button></div>
+    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button><button class="btn btn-primary" id="selShow">Who’s free?</button></div>
   `;
 
   $$('[data-act="add"]').forEach((b) => b.addEventListener("click", () => openFlow()));
@@ -1201,7 +1200,7 @@ function calendarHtml() {
         <div class="verdict-date">${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</div>
         <div class="verdict-sub"><b>${top.s.yes.length + top.s.maybe.length} of ${n}</b> can make it · ${top.s.yes.length} definitely</div>
         <div class="verdict-meter" aria-hidden="true"><i style="width:${Math.round(((top.s.yes.length + top.s.maybe.length) / n) * 100)}%"></i></div>
-        <button class="btn btn-tinted" data-best="${top.d}">See who's in</button>
+        <button class="btn btn-tinted" data-best="${top.d}">See who’s in</button>
       </div>`
         : ""
     }
@@ -1211,14 +1210,14 @@ function calendarHtml() {
       <div class="best">${best
         .slice(1)
         .map(
-          (b, i) => `<button class="best-card" data-best="${b.d}"><div class="rank">#${i + 2}</div><div class="date flap">${flap(b.d)}</div><div class="counts">${b.s.yes.length + b.s.maybe.length}/${n} · ${b.s.yes.length} sure</div></button>`,
+          (b, i) => `<button class="best-card" data-best="${b.d}"><div class="rank">#${i + 2}</div><div class="date flap">${flap(b.d)}</div><div class="counts">${b.s.yes.length + b.s.maybe.length}/${n} · ${b.s.yes.length} definitely</div></button>`,
         )
         .join("")}</div>`
         : ""
     }
     <div class="cal-toolbar">
       <div class="legend"><span>0/${n}</span><span class="legend-scale">${legend}</span><span>${n}/${n} available</span></div>
-      <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} Select dates</button>
+      <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} Compare dates</button>
     </div>
     ${monthsHtml(eventRange(event), (date) => {
       const s = days.get(date);
@@ -1268,7 +1267,7 @@ function exitSelectMode() {
   current.selected.clear();
   $$(".day.selected").forEach((d) => d.classList.remove("selected"));
   const t = $("#selectToggle");
-  if (t) t.innerHTML = `${icon("grid").replace("<svg", '<svg width="16" height="16"')} Select dates`;
+  if (t) t.innerHTML = `${icon("grid").replace("<svg", '<svg width="16" height="16"')} Compare dates`;
   updateSelectBar();
 }
 function updateSelectBar() {
@@ -1309,14 +1308,14 @@ function openDaySheet(dates) {
   openSheet(`
     <div class="sheet-head"><div><h2>${esc(title)}</h2><div class="sheet-sub">${esc(sub)}</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
     <div class="tally">
-      <div class="t-yes"><b>${yes.length}</b><span>Yes</span></div>
+      <div class="t-yes"><b>${yes.length}</b><span>Definitely</span></div>
       <div class="t-maybe"><b>${maybe.length}</b><span>Maybe</span></div>
-      <div class="t-no"><b>${no.length}</b><span>No</span></div>
+      <div class="t-no"><b>${no.length}</b><span>Can’t</span></div>
     </div>
     <div class="name-list">
       ${section("Definitely", yes, "yes")}
       ${section("Maybe", maybe, "maybe")}
-      ${section("Can't make it", no, "erase")}
+      ${section("Can’t make it", no, "erase")}
       ${responses.length ? "" : '<p class="sheet-sub">No responses yet.</p>'}
     </div>
   `);
@@ -1375,7 +1374,7 @@ function activityRow(a, { likeable = false, liked = false } = {}) {
   </div>`;
 }
 
-/** Activity row on the event page: like other people's ideas, remove your own. */
+/** Activity row on the event page: like other people’s ideas, remove your own. */
 function eventActivityRow(a, me) {
   const own = me && a.byId === me.r.id;
   const liked = !!me && (me.r.likes || []).includes(a.id);
@@ -1447,7 +1446,7 @@ function activitiesHtml() {
 function askName() {
   return new Promise((resolve) => {
     openSheet(
-      `<div class="sheet-head"><div><h2>What's your name?</h2><div class="sheet-sub">So the group knows who voted. No account needed.</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+      `<div class="sheet-head"><div><h2>What’s your name?</h2><div class="sheet-sub">So the group knows who voted. No account needed.</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
        <form class="stack" data-form="name"><input class="big-input" name="name" maxlength="40" placeholder="Your name" autocomplete="given-name" value="${esc(store.get("convene:name", ""))}" />
        <button class="btn btn-primary btn-block" type="submit">Continue</button></form>`,
       { onClose: () => resolve(null) },
@@ -1519,7 +1518,7 @@ function bindQuickActions() {
         (d) => {
           const i = d.destinations.findIndex((x) => x.toLowerCase() === name.toLowerCase());
           if (i >= 0) d.destinations.splice(i, 1);
-          else if (d.destinations.length >= 10) return void toast("Up to 10 places per person", { error: true }) ?? false;
+          else if (d.destinations.length >= 10) return void toast("You can pick up to 10 places", { error: true }) ?? false;
           else (d.destinations.push(name), (added = true));
         },
         {
@@ -1561,7 +1560,7 @@ function bindQuickActions() {
       const existing = current.agg.destinations.find((d) => d.name.toLowerCase() === v.toLowerCase());
       return quickSave((d) => {
         if (d.destinations.some((x) => x.toLowerCase() === v.toLowerCase())) return void toast("You already voted for that place") ?? false;
-        if (d.destinations.length >= 10) return void toast("Up to 10 places per person", { error: true }) ?? false;
+        if (d.destinations.length >= 10) return void toast("You can pick up to 10 places", { error: true }) ?? false;
         d.destinations.push(existing ? existing.name : v);
       });
     }
@@ -1574,19 +1573,19 @@ function bindQuickActions() {
         try {
           new URL(link);
         } catch {
-          return toast("That link doesn't look right", { error: true });
+          return toast("That link doesn’t look right", { error: true });
         }
       }
       const destination = form.destination.value;
       return quickSave((d) => {
-        if (d.activities.length >= 15) return void toast("Up to 15 activities per person", { error: true }) ?? false;
+        if (d.activities.length >= 15) return void toast("You can add up to 15 activities", { error: true }) ?? false;
         d.activities.push({ id: newId(), title, link, destination });
       });
     }
   });
 }
 
-/** Shown in the event's last 7 days. */
+/** Shown in the event’s last 7 days. */
 function expiryNotice(event) {
   if (!event.delete_at) return "";
   const days = Math.ceil((event.delete_at - Date.now()) / 86_400_000);
@@ -1723,7 +1722,7 @@ function openFlow({ edit = null } = {}) {
       statusEl.textContent = "";
     } else if (step === "dates") {
       nextBtn.textContent = "Continue";
-      statusEl.innerHTML = `<b style="color:var(--yes)">${st.yes.size}</b> yes · <b style="color:var(--accent)">${st.maybe.size}</b> maybe`;
+      statusEl.innerHTML = `<b style="color:var(--yes)">${st.yes.size}</b> definitely · <b style="color:var(--accent)">${st.maybe.size}</b> maybe`;
     } else if (step === "destinations") {
       nextBtn.textContent = st.destinations.length ? "Continue" : "Skip";
       statusEl.textContent = st.destinations.length ? `${st.destinations.length} picked` : "";
@@ -1761,7 +1760,7 @@ function openFlow({ edit = null } = {}) {
     if (step === "name")
       return `
         <div class="eyebrow">${esc(event.title)}</div>
-        <h2 class="flow-title">${animatedTitle(edit ? "Welcome *back.*" : "Hi there! What's your *name?*")}</h2>
+        <h2 class="flow-title">${animatedTitle(edit ? "Welcome *back.*" : "Hi there! What’s your *name?*")}</h2>
         <p class="flow-lead">This is how the group will see you. No account, no password.</p>
         <input class="big-input" id="nameInput" maxlength="40" placeholder="Your name" autocomplete="given-name" enterkeyhint="next" value="${esc(st.name)}" />
       `;
@@ -1769,7 +1768,7 @@ function openFlow({ edit = null } = {}) {
       return `
         <div class="eyebrow">Step 2 of 5</div>
         <h2 class="flow-title">${animatedTitle(`When are you *free,* ${st.name.split(" ")[0]}?`)}</h2>
-        <p class="flow-lead">Open the calendar and tap the days that work. Dark blue means you're definitely in, light blue means maybe.</p>
+        <p class="flow-lead">Open the calendar and tap the days that work. Dark blue means you’re definitely in, light blue means maybe.</p>
         <button type="button" class="card date-launcher" id="openDays">
           <span class="feature-icon">${icon("calendar")}</span>
           <span class="dl-text"><b>Choose your days</b><span>${esc(fmtRange(eventRange(event).start, eventRange(event).end))}</span></span>
@@ -1783,9 +1782,9 @@ function openFlow({ edit = null } = {}) {
       return `
         <div class="eyebrow">Step 3 of 5</div>
         <h2 class="flow-title">${animatedTitle("Where should we *go?*")}</h2>
-        <p class="flow-lead">${others.destinations.length ? "Here's what the group has suggested so far. Tap the ones you'd love — or add your own." : "You're the first to suggest a place. Add as many as you like."}</p>
+        <p class="flow-lead">${others.destinations.length ? "Here’s what the group has suggested so far. Tap the ones you’d love — or add your own." : "You’re the first to suggest a place. Add as many as you like."}</p>
         <div class="add-row"><input id="destInput" maxlength="60" placeholder="City, country, place…" enterkeyhint="done" /><button class="btn btn-secondary" id="destAdd" type="button">${icon("plus")} Add</button></div>
-        ${names.length ? `<div class="preview-label">${icon("trophy").replace("<svg", '<svg width="16" height="16"')} Suggested destinations</div>` : ""}
+        ${names.length ? `<div class="preview-label">${icon("trophy").replace("<svg", '<svg width="16" height="16"')} Suggested places</div>` : ""}
         <div class="chips" id="destChips">${names
           .map((n, i) => {
             const o = others.destinations.find((d) => d.name.toLowerCase() === n.toLowerCase());
@@ -1828,12 +1827,12 @@ function openFlow({ edit = null } = {}) {
     return `
       <div class="eyebrow">Step 5 of 5</div>
       <h2 class="flow-title">${animatedTitle("Looking *good.* Ready?")}</h2>
-      <p class="flow-lead">Here's what you'll add to <b>${esc(event.title)}</b>.</p>
+      <p class="flow-lead">Here’s what you’ll add to <b>${esc(event.title)}</b>.</p>
       <div class="summary">
-        <div class="card"><h4>You</h4><div style="display:flex;align-items:center;gap:12px;margin-top:6px">${avatar(st.name)}<span class="big" style="font-size:24px">${esc(st.name)}</span></div></div>
-        <div class="card"><h4>Days</h4><div class="big">${st.yes.size}<span style="font-size:17px;color:var(--label-2);font-weight:600"> definitely</span></div><p>${st.maybe.size} maybe${firstYes ? ` · first: ${esc(fmtDate(firstYes))}` : ""}</p></div>
-        <div class="card"><h4>Destinations</h4><p>${st.destinations.length ? esc(st.destinations.join(", ")) : "None — that's fine."}</p></div>
-        <div class="card"><h4>Activities</h4><p>${st.activities.length ? esc(st.activities.map((a) => a.title).join(", ")) : "None added."}${st.likes.size ? ` · ${st.likes.size} liked` : ""}</p></div>
+        <div class="card"><h4>You</h4><div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.375rem">${avatar(st.name)}<span class="big big-name">${esc(st.name)}</span></div></div>
+        <div class="card"><h4>Days</h4><div class="big">${st.yes.size}<span class="big-unit"> definitely</span></div><p>${st.maybe.size} maybe${firstYes ? ` · first: ${esc(fmtDate(firstYes))}` : ""}</p></div>
+        <div class="card"><h4>Places</h4><p>${st.destinations.length ? esc(st.destinations.join(", ")) : "None yet."}</p></div>
+        <div class="card"><h4>Activities</h4><p>${st.activities.length ? esc(st.activities.map((a) => a.title).join(", ")) : "None yet."}${st.likes.size ? ` · ${st.likes.size} liked` : ""}</p></div>
       </div>
     `;
   }
@@ -1893,7 +1892,7 @@ function openFlow({ edit = null } = {}) {
         const v = input.value.trim().replace(/\s+/g, " ").slice(0, 60);
         if (!v) return;
         if (!st.destinations.some((d) => d.toLowerCase() === v.toLowerCase())) {
-          if (st.destinations.length >= 10) return toast("Up to 10 destinations", { error: true });
+          if (st.destinations.length >= 10) return toast("You can pick up to 10 places", { error: true });
           const existing = allDestNames().find((d) => d.toLowerCase() === v.toLowerCase());
           st.destinations.push(existing || v);
         }
@@ -1909,7 +1908,7 @@ function openFlow({ edit = null } = {}) {
         const idx = st.destinations.findIndex((d) => d.toLowerCase() === name.toLowerCase());
         if (idx >= 0) st.destinations.splice(idx, 1);
         else {
-          if (st.destinations.length >= 10) return toast("Up to 10 destinations", { error: true });
+          if (st.destinations.length >= 10) return toast("You can pick up to 10 places", { error: true });
           st.destinations.push(name);
         }
         rerenderChips();
@@ -1947,16 +1946,16 @@ function openFlow({ edit = null } = {}) {
         const title = titleIn.value.trim();
         if (!title) {
           titleIn.focus();
-          return toast("Describe the activity first", { error: true });
+          return toast("Give the activity a name first", { error: true });
         }
-        if (st.activities.length >= 15) return toast("Up to 15 activities", { error: true });
+        if (st.activities.length >= 15) return toast("You can add up to 15 activities", { error: true });
         let link = linkIn.value.trim();
         if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
         if (link) {
           try {
             new URL(link);
           } catch {
-            return toast("That link doesn't look right", { error: true });
+            return toast("That link doesn’t look right", { error: true });
           }
         }
         st.activities.push({ id: Math.random().toString(36).slice(2, 12).padEnd(10, "x").replace(/[^a-z0-9]/gi, "x"), title, link, destination: $("#actDest", el).value });
@@ -2019,7 +2018,7 @@ function openFlow({ edit = null } = {}) {
     const step = STEPS[st.step];
     if (step === "name" && !st.name.trim()) return;
     if (step === "dates" && st.yes.size + st.maybe.size === 0) {
-      if (!confirm("You haven't marked any days. Continue anyway?")) return;
+      if (!confirm("You haven’t marked any days. Continue anyway?")) return;
     }
     if (step === "review") return submit();
     st.step++;
@@ -2075,7 +2074,7 @@ function countUp(el, to, ms = 1100) {
   requestAnimationFrame(step);
 }
 
-/** "You're on board": shown after submitting or saving availability. */
+/** "You’re on board": shown after submitting or saving availability. */
 function showBoardingPass({ edited }) {
   const me = myCurrentResponse();
   if (!me) return;
@@ -2094,17 +2093,17 @@ function showBoardingPass({ edited }) {
   const top = best[0];
   const headline =
     top && me.r.yes.includes(top.d)
-      ? `You're free on the group's best date so far, <b>${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</b>.`
+      ? `You’re free on the group’s best date so far, <b>${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</b>.`
       : matches
         ? `You match <b>${matches} of the 3</b> best dates so far.`
         : mine.size
-          ? "Your days are in. Let's see who joins you."
+          ? "Your days are in. Let’s see who joins you."
           : "No days yet — you can add them any time.";
   const url = `${location.origin}/e/${event.id}`;
   openSheet(`
     <div class="boarding">
       <div class="pass-row"><span class="pass-airline">${icon("plane")} Wingman</span><span class="pass-code">Flight WM-${esc(event.id.slice(0, 4).toUpperCase())}</span></div>
-      <h2 class="boarding-title">${edited ? "Changes saved" : "You're on board"}, ${esc(first)}!</h2>
+      <h2 class="boarding-title">${edited ? "Changes saved" : "You’re on board"}, ${esc(first)}!</h2>
       <p class="boarding-sub">${headline}</p>
       <div class="boarding-stats">
         <div><b data-count="${mine.size}">0</b><span>days marked</span></div>
