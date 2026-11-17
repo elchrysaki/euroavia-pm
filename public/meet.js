@@ -5,8 +5,8 @@
 //      drag across many, select a whole week (›) or month, or use the quick picks.
 //   2. Details: name, what it's about, "No earlier than" / "No later than" and the time zone.
 // Meeting page: "Add availability" asks just for a name (this device remembers it), then click and drag
-// rectangles on the half-hour grid as Available, If needed or Unavailable; changes save as you go.
-// The group grid shades each time by how many people are free (if needed counts half); hover or tap
+// rectangles on the half-hour grid as Available, Maybe or Unavailable; changes save as you go.
+// The group grid shades each time by how many people are free (maybe counts half); hover or tap
 // a time to see who, or tap a name to see only that person's times. Times show in your own time
 // zone by default, and you can pick another.
 
@@ -443,6 +443,16 @@ function refreshOnReturn() {
 }
 
 const step = () => M.meeting.step || 15;
+const ROW = 30; // minutes per row, for every meeting (older 15-minute ones show two slots per row)
+/** A grid cell is a space-separated list of slot keys (one, or two for older meetings). */
+const keysOf = (cell) => cell.split(" ");
+/** "yes" when every slot in the cell is available, "maybe" when each is at least a maybe, else "". */
+function stateIn(sets, cell) {
+  const ks = keysOf(cell);
+  if (ks.every((k) => sets.yes.has(k))) return "yes";
+  if (ks.every((k) => sets.yes.has(k) || sets.maybe.has(k))) return "maybe";
+  return "";
+}
 /** Each person's sets; yours come from what you're editing right now. */
 const setsOf = (p) => (M.me && p.id === M.me.id ? M.mine : { yes: new Set(p.slots), maybe: new Set(p.maybe || []) });
 
@@ -463,9 +473,11 @@ function layout() {
       key = String(DOW_MON_FIRST.indexOf(d)).padStart(2, "0") + d;
       minute = mm;
     }
+    const row = minute - (minute % ROW);
     if (!cols.has(key)) cols.set(key, new Map());
-    cols.get(key).set(minute, s);
-    minutes.add(minute);
+    const cells = cols.get(key);
+    cells.set(row, cells.has(row) ? `${cells.get(row)} ${s}` : s);
+    minutes.add(row);
   }
   const columns = [...cols.keys()].sort().map((k) => {
     if (meeting.kind === "dates") {
@@ -539,7 +551,7 @@ function paintBody() {
               ? `<div><h2>Your availability</h2><p class="mtg-hint">Drag across the times you can make. <span id="saveState">Saved automatically.</span></p></div>
                  <div class="paint-modes" role="group" aria-label="Mark as">
                    <button type="button" data-mode="yes" aria-pressed="${M.mode === "yes"}"><span class="sw yes"></span>Available</button>
-                   <button type="button" data-mode="maybe" aria-pressed="${M.mode === "maybe"}"><span class="sw maybe"></span>If needed</button>
+                   <button type="button" data-mode="maybe" aria-pressed="${M.mode === "maybe"}"><span class="sw maybe"></span>Maybe</button>
                    <button type="button" data-mode="erase" aria-pressed="${M.mode === "erase"}"><span class="sw none"></span>Unavailable</button>
                  </div>`
               : `<div><h2>${M.filter ? `${esc(M.people.find((p) => p.id === M.filter)?.name || "")}’s availability` : "Group availability"}</h2>
@@ -652,12 +664,12 @@ function pageSize(total) {
   return Math.max(3, Math.min(total, Math.floor(width / 64)));
 }
 
-function score(slot) {
+function score(cell) {
   let s = 0;
   for (const p of M.people) {
-    const st = setsOf(p);
-    if (st.yes.has(slot)) s += 1;
-    else if (st.maybe.has(slot)) s += 0.5;
+    const st = stateIn(setsOf(p), cell);
+    if (st === "yes") s += 1;
+    else if (st === "maybe") s += 0.5;
   }
   return s;
 }
@@ -676,17 +688,17 @@ function paintGridOnly() {
   let rows = "";
   L.rows.forEach((minute, r) => {
     const onHour = minute % 60 === 0;
-    rows += `<div class="g-time${onHour ? " hour" : ""}">${onHour || step() >= 30 ? esc(timeLabel(minute)) : ""}</div>`;
+    rows += `<div class="g-time${onHour ? " hour" : ""}">${esc(timeLabel(minute))}</div>`;
     cols.forEach((c, ci) => {
       const slot = c.cells.get(minute);
       const cls = `g-cell${onHour ? " hour" : ""}`;
       if (!slot) return void (rows += `<div class="${cls} none"></div>`);
       if (M.editing) {
-        const st = M.mine.yes.has(slot) ? " yes" : M.mine.maybe.has(slot) ? " maybe" : "";
-        rows += `<div class="${cls} edit${st}" data-s="${slot}" data-c="${ci}" data-r="${r}"></div>`;
+        const st = stateIn(M.mine, slot);
+        rows += `<div class="${cls} edit${st ? ` ${st}` : ""}" data-s="${slot}" data-c="${ci}" data-r="${r}"></div>`;
       } else if (filterSets) {
-        const st = filterSets.yes.has(slot) ? " yes" : filterSets.maybe.has(slot) ? " maybe" : "";
-        rows += `<div class="${cls} solo${st}" data-s="${slot}"></div>`;
+        const st = stateIn(filterSets, slot);
+        rows += `<div class="${cls} solo${st ? ` ${st}` : ""}" data-s="${slot}"></div>`;
       } else {
         const k = score(slot);
         rows += `<div class="${cls} g${k ? " heat" : ""}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}"></div>`;
@@ -710,13 +722,13 @@ function paintGridOnly() {
   if (legend && !M.filter) {
     const steps = Math.min(Math.max(n, 1), 5);
     legend.innerHTML = `<span>0/${n}</span><span class="legend-scale">${Array.from({ length: steps + 1 }, (_, k) => `<i style="--t:${(k / steps).toFixed(3)}"></i>`).join("")}</span><span>${n}/${n} free</span>`;
-  } else if (legend) legend.innerHTML = `<span class="sw yes"></span>Available <span class="sw maybe"></span>If needed`;
+  } else if (legend) legend.innerHTML = `<span class="sw yes"></span>Available <span class="sw maybe"></span>Maybe`;
   paintWho();
   paintBest(L);
 }
 
 /* When2meet-style painting: press on a time and drag a rectangle; every time in it gets the chosen
-   mark (Available / If needed / Unavailable). Saved a moment after you let go. */
+   mark (Available / Maybe / Unavailable). Saved a moment after you let go. */
 function bindEditGrid(grid) {
   const cellAt = (x, y) => document.elementFromPoint(x, y)?.closest?.(".tgrid.editing .g-cell[data-s]");
   let drag = null;
@@ -735,7 +747,10 @@ function bindEditGrid(grid) {
       const r = +el.dataset.r;
       const s = el.dataset.s;
       if (c >= c0 && c <= c1 && r >= r0 && r <= r1) show(el, drag.mode === "yes", drag.mode === "maybe");
-      else show(el, drag.yes.has(s), drag.maybe.has(s));
+      else {
+        const st = stateIn(drag, s);
+        show(el, st === "yes", st === "maybe");
+      }
     }
   };
   grid.addEventListener("pointerdown", (e) => {
@@ -745,7 +760,7 @@ function bindEditGrid(grid) {
     grid.setPointerCapture(e.pointerId);
     // tapping a time that already has the chosen mark clears it
     const s = cell.dataset.s;
-    const has = M.mode === "yes" ? M.mine.yes.has(s) : M.mode === "maybe" ? M.mine.maybe.has(s) : false;
+    const has = M.mode !== "erase" && stateIn(M.mine, s) === M.mode;
     drag = { c: +cell.dataset.c, r: +cell.dataset.r, mode: has ? "erase" : M.mode, yes: new Set(M.mine.yes), maybe: new Set(M.mine.maybe), last: cell };
     apply({ c: drag.c, r: drag.r });
   });
@@ -759,11 +774,14 @@ function bindEditGrid(grid) {
   const end = () => {
     if (!drag) return;
     for (const el of cells) {
-      const s = el.dataset.s;
-      M.mine.yes.delete(s);
-      M.mine.maybe.delete(s);
-      if (el.classList.contains("yes")) M.mine.yes.add(s);
-      else if (el.classList.contains("maybe")) M.mine.maybe.add(s);
+      const before = stateIn(drag, el.dataset.s);
+      const now = el.classList.contains("yes") ? "yes" : el.classList.contains("maybe") ? "maybe" : "";
+      if (now === before) continue; // untouched: keep exactly what was there
+      for (const k of keysOf(el.dataset.s)) {
+        M.mine.yes.delete(k);
+        M.mine.maybe.delete(k);
+        if (now) M.mine[now].add(k);
+      }
     }
     drag = null;
     save();
@@ -815,9 +833,10 @@ function bindGroupGrid(grid) {
   grid.addEventListener("click", (e) => focus(e.target.closest(".g-cell[data-s]")));
 }
 
-function describeSlot(slot) {
+function describeSlot(cell) {
   const { meeting } = M;
-  const len = step();
+  const slot = keysOf(cell)[0];
+  const len = ROW;
   if (meeting.kind === "dates") {
     const z = zoned(Number(slot.slice(1)) * 60000, M.tz);
     const d = K.parseDate(z.date);
@@ -842,25 +861,25 @@ function paintWho() {
   const maybe = [];
   const no = [];
   for (const p of M.people) {
-    const st = setsOf(p);
-    (st.yes.has(M.focus) ? yes : st.maybe.has(M.focus) ? maybe : no).push(p.name);
+    const st = stateIn(setsOf(p), M.focus);
+    (st === "yes" ? yes : st === "maybe" ? maybe : no).push(p.name);
   }
   const list = (names) => names.map((x) => `<li>${avatar(x, "sm")}<span>${esc(x)}</span></li>`).join("");
   el.innerHTML = `
-    <div class="who-head"><b>${esc(describeSlot(M.focus))}</b><span>${yes.length} of ${n} available${maybe.length ? ` · ${maybe.length} if needed` : ""}</span></div>
+    <div class="who-head"><b>${esc(describeSlot(M.focus))}</b><span>${yes.length} of ${n} available${maybe.length ? ` · ${maybe.length} maybe` : ""}</span></div>
     ${yes.length ? `<h4><span class="sw yes"></span>Available</h4><ul class="who-list">${list(yes)}</ul>` : ""}
-    ${maybe.length ? `<h4><span class="sw maybe"></span>If needed</h4><ul class="who-list">${list(maybe)}</ul>` : ""}
+    ${maybe.length ? `<h4><span class="sw maybe"></span>Maybe</h4><ul class="who-list">${list(maybe)}</ul>` : ""}
     ${no.length ? `<h4><span class="sw none"></span>Unavailable</h4><ul class="who-list dim">${list(no)}</ul>` : ""}`;
 }
 
-/** "Best time so far": the longest stretch where the most people are free (if-needed counts half). */
+/** "Best time so far": the longest stretch where the most people are free (maybe counts half). */
 function paintBest(L) {
   const { $, esc, icon } = K;
   const el = $("#mtgBest");
   if (!el) return;
   const n = M.people.length;
   if (!n || M.editing) return void (el.innerHTML = "");
-  const len = step();
+  const len = ROW;
   let best = null;
   const better = (a) => !best || a.k > best.k || (a.k === best.k && a.end - a.start > best.end - best.start);
   for (const c of L.columns) {
@@ -878,11 +897,11 @@ function paintBest(L) {
   }
   if (!best) return void (el.innerHTML = "");
   let yes = 0;
-  for (const p of M.people) if (setsOf(p).yes.has(best.slot)) yes += 1;
+  for (const p of M.people) if (stateIn(setsOf(p), best.slot) === "yes") yes += 1;
   el.innerHTML = `<div class="card best-time">
     <span class="best-ico">${icon("clock")}</span>
     <div><span class="best-label">Best time so far</span>
     <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b>
-    <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} if needed` : ""}</span></div>
+    <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} maybe` : ""}</span></div>
   </div>`;
 }

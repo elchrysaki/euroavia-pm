@@ -6,7 +6,7 @@
 //  - "week" mode: days of the week; slots are "w<day 0-6>:<minute of day>", not tied to a time zone.
 // People add their availability with just a name (no password): a new name creates a person, a
 // returning name gets that person back. The browser remembers it (the returned token) per meeting.
-// Each person marks slots as available or "if needed" (maybe).
+// Each person marks slots as available or maybe.
 // New meetings use 30-minute slots (older ones keep 15) and a 6-digit PIN as their id, shared with
 // trip events, so anyone can join by typing the PIN.
 
@@ -240,7 +240,7 @@ export async function handleMeetings(request, env, parts) {
     return json({ id, token, name, slots: [], maybe: [] }, 201);
   }
 
-  // PUT /api/meetings/:id/people/:pid  { token, slots[], maybe[] } — available and "if needed" slots
+  // PUT /api/meetings/:id/people/:pid  { token, slots[], maybe[] } — available and maybe slots
   if (parts.length === 4 && parts[2] === "people" && method === "PUT") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);

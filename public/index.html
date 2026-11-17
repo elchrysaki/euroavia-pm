@@ -10,8 +10,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Wingman" />
-  <link rel="icon" href="/icon-192.png" type="image/png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" href="/icon.svg?v=2" type="image/svg+xml" />
+  <link rel="alternate icon" href="/icon-192.png?v=2" type="image/png" />
+  <link rel="preload" href="/fonts/michroma.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <script>
     /* Pick the visual mode before first paint: "full" (glass, long animations) or "lite" (smooth mode).
@@ -47,7 +49,7 @@
       d.setAttribute("data-perf-reason", why);
     })();
   </script>
-  <link rel="stylesheet" href="/styles.css?v=28" />
+  <link rel="stylesheet" href="/styles.css?v=30" />
 </head>
 <body>
   <!-- the background: one fixed layer that never moves or re-scales, the same on every page -->
@@ -55,8 +57,7 @@
 
   <header class="topbar" id="navbar">
     <a href="/" class="brand" data-link aria-label="Wingman home">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <span>Wingman</span>
+      <span class="wordmark">Wingman</span>
     </a>
     <a class="navlink" href="/dashboard" data-link data-tab="dashboard">Dashboard</a>
     <a class="navlink" href="/join" data-link data-tab="join">Join with PIN</a>
@@ -73,6 +74,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/app.js?v=30" type="module"></script>
+  <script src="/app.js?v=32" type="module"></script>
 </body>
 </html>

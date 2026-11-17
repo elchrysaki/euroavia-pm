@@ -1,26 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Wingman tab icon: a blue-steel tile with a silver W whose strokes rise like two wings. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#e9f6ff"/>
-      <stop offset=".45" stop-color="#9fd4ff"/>
-      <stop offset="1" stop-color="#2f7dff"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f7dff"/>
+      <stop offset="0.48" stop-color="#0b4fd1"/>
+      <stop offset="0.52" stop-color="#083fa8"/>
+      <stop offset="1" stop-color="#0a2c6e"/>
     </linearGradient>
     <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset=".5" stop-color="#d5e6f7"/>
-      <stop offset="1" stop-color="#8fb3d9"/>
+      <stop offset="0.45" stop-color="#dbe7f7"/>
+      <stop offset="0.55" stop-color="#9fb6d6"/>
+      <stop offset="1" stop-color="#eef4ff"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
-  <g fill="url(#chrome)" stroke="#ffffff" stroke-opacity=".7" stroke-width="4">
-    <rect x="112" y="112" width="80" height="80" rx="22"/>
-    <rect x="216" y="112" width="80" height="80" rx="22" fill="#0a4fd8"/>
-    <rect x="320" y="112" width="80" height="80" rx="22"/>
-    <rect x="112" y="216" width="80" height="80" rx="22" fill="#5aaeff"/>
-    <rect x="216" y="216" width="80" height="80" rx="22" fill="#0a4fd8"/>
-    <rect x="320" y="216" width="80" height="80" rx="22" fill="#0a4fd8"/>
-    <rect x="112" y="320" width="80" height="80" rx="22"/>
-    <rect x="216" y="320" width="80" height="80" rx="22" fill="#5aaeff"/>
-    <rect x="320" y="320" width="80" height="80" rx="22"/>
+  <rect width="512" height="512" rx="116" fill="url(#tile)"/>
+  <rect x="10" y="10" width="492" height="492" rx="106" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="6"/>
+  <g transform="translate(66 40) scale(0.84)">
+    <path d="M70 158 H168 L212 296 L256 206 L300 296 L344 158 H442 L338 392 H282 L256 340 L230 392 H174 Z" fill="url(#chrome)"/>
   </g>
+  <!-- speed lines: the W takes off -->
+  <path d="M52 236 H118 M68 280 H134 M84 324 H150" stroke="#cfe0ff" stroke-opacity="0.8" stroke-width="14" stroke-linecap="round"/>
 </svg>

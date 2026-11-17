@@ -150,6 +150,7 @@ conn?.addEventListener?.("change", () => {
   else if (/(^|-)2g|3g/.test(conn.effectiveType || "")) perf.set("lite", "slow-network");
 });
 
+const CHEVRON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 const icon = (name) => {
   const paths = {
     calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
@@ -1416,7 +1417,8 @@ async function renderEvent(id, { keepTab = false, quiet = false } = {}) {
 
 function paintEvent(data, prevTab, { quiet = false } = {}) {
   const keepFilter = current?.event?.id === data.event.id ? current.filter : null;
-  current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set(), filter: keepFilter };
+  const keepMore = current?.event?.id === data.event.id ? current.moreBest : false; // the expanded "more dates" stays open
+  current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set(), filter: keepFilter, moreBest: keepMore };
   app.classList.toggle("quiet", quiet); // in-place update (a vote, a like): no entrance animations
   const { event, responses } = data;
   document.title = `${event.title} — Wingman`;
@@ -1563,11 +1565,32 @@ function calendarHtml() {
   return `
     ${
       top
-        ? `<div class="card verdict">
+        ? `<div class="card verdict${current.moreBest ? " open" : ""}">
         <div class="verdict-label">${icon("plane")} Best date so far</div>
-        <div class="verdict-date">${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</div>
+        <button type="button" class="verdict-toggle" id="moreBest" aria-expanded="${!!current.moreBest}" aria-controls="bestList" ${best.length > 1 ? "" : "disabled"}>
+          <span class="verdict-date">${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</span>
+          ${best.length > 1 ? `<span class="verdict-chev" aria-hidden="true">${CHEVRON}</span>` : ""}
+        </button>
         <div class="verdict-sub"><b>${top.s.yes.length + top.s.maybe.length} of ${n}</b> can make it · ${top.s.yes.length} definitely</div>
-        <button class="btn btn-tinted" data-best="${top.d}">See who’s in</button>
+        <div class="verdict-actions">
+          <button class="btn btn-tinted" data-best="${top.d}">See who’s in</button>
+          ${best.length > 1 ? `<button type="button" class="btn btn-plain" data-more-best>${current.moreBest ? "Fewer dates" : `More dates (${best.length - 1})`}</button>` : ""}
+        </div>
+        ${
+          best.length > 1
+            ? `<ol class="best-list" id="bestList" ${current.moreBest ? "" : "hidden"}>${best
+                .slice(1)
+                .map((b, i) => {
+                  const can = b.s.yes.length + b.s.maybe.length;
+                  return `<li><button type="button" class="best-row" data-best="${b.d}">
+                    <span class="best-rank">${i + 2}</span>
+                    <span class="best-main"><b>${esc(fmtDate(b.d, { weekday: "long", day: "numeric", month: "long" }))}</b><span>${can} of ${n} can make it · ${b.s.yes.length} definitely</span></span>
+                    <span class="best-bar" aria-hidden="true"><i style="width:${Math.round((can / n) * 100)}%"></i></span>
+                  </button></li>`;
+                })
+                .join("")}</ol>`
+            : ""
+        }
       </div>`
         : ""
     }
@@ -1593,6 +1616,20 @@ function bindCalendar() {
   body.addEventListener("click", (e) => {
     const best = e.target.closest("[data-best]");
     if (best) return openDaySheet([best.dataset.best]);
+    if (e.target.closest("[data-goto-places]")) {
+      $('[data-seg="tabs"] [data-value="destinations"]')?.click();
+      setTimeout(() => $('[data-form="place"] input')?.focus(), 50);
+      return;
+    }
+    if (e.target.closest("#moreBest, [data-more-best]")) {
+      current.moreBest = !current.moreBest;
+      $(".verdict")?.classList.toggle("open", current.moreBest);
+      $("#bestList")?.toggleAttribute("hidden", !current.moreBest);
+      $("#moreBest")?.setAttribute("aria-expanded", String(current.moreBest));
+      const more = $("[data-more-best]");
+      if (more) more.textContent = current.moreBest ? "Fewer dates" : `More dates (${$$("#bestList li").length})`;
+      return;
+    }
     if (e.target.closest("#showAll")) {
       current.filter = null;
       $$("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", "false"));
@@ -1786,6 +1823,7 @@ function activitiesHtml() {
         </select>
         <button class="btn btn-primary full" type="submit">${icon("plus")} Add activity</button>
       </div>
+      <p class="form-hint">The places in this list are the ones suggested under Places. Missing one? <button type="button" class="btn-link" data-goto-places>Suggest a place</button></p>
     </form>`;
   if (!activities.length)
     return `${form}<div class="card empty"><div class="glyph">${icon("sparkles")}</div><h3>No activities yet</h3><p>Add the first idea above — links welcome.</p></div>`;

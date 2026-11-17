@@ -2,7 +2,8 @@
 
 A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like Blitz.
 
-- **Header bar** on every page: the outlined Wingman logo (home), **Dashboard**, **Join with PIN** and **+ New event**. Hovering a link shows a faded pill, and the page you're on keeps it. On phones the links fold into a ☰ menu.
+- **Logo:** the word "Wingman" set in Michroma (a wide aerospace-style face, SIL Open Font License, `public/fonts/`) with a brushed-metal finish: blue steel in light mode, chrome in dark mode. The tab and home-screen icon (`public/icon.svg`, rendered to the PNGs) is a blue-steel tile with a silver W and three speed lines.
+- **Header bar** on every page: the Wingman wordmark (home), **Dashboard**, **Join with PIN** and **+ New event**. Hovering a link shows a faded pill, and the page you're on keeps it. On phones the links fold into a ☰ menu.
 - **Home** (`/`): what Wingman does, **Create an event** (choose **Trip days** or **Meeting times**), a **PIN** box to join one, "See it in action" and three steps.
 - **Dashboard** (`/dashboard`): "Welcome back", what you recently viewed, your meetings and your trips with live counts, and on the right **Create a new event** and **Join with PIN**. Plans the server has deleted drop off the list.
 - **Join with PIN** (`/join`, or `/join?pin=123456`): every new trip and meeting gets a 6-digit PIN as its id (unique across both). Typing it opens the plan. Older plans keep their long links.
@@ -22,7 +23,7 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
    - **Calendar heatmap:** the darker a day, the more people can come. Tap a day to see who said yes, maybe and no.
    - **Who responded:** tap a name to see only that person's days (definitely and maybe); tap again or **Show everyone** to go back.
    - **Select dates:** pick several days to see who is free on *all* of them.
-   - **Best date:** the day most people can make, at the top of the calendar.
+   - **Best date:** the day most people can make, at the top of the calendar. Tap it (or **More dates**) to expand the next five best dates; tap one to see who can make it.
    - **Places leaderboard:** destinations ranked by votes.
    - **Activities:** ideas grouped by destination, with links and likes.
 
@@ -36,10 +37,10 @@ Works like When2meet:
    - **Dates.** The calendar opens on the next 4 weeks and scrolls up to 3 months ahead. Tap a day, or press and drag to select every date between where you start and where you let go (on a touch screen, hold a day first). The **›** next to a week selects that week, **Select month** selects a month, and quick picks cover the next 7 days, 2 weeks or 4 weeks, weekdays only, or clear. Then press **Let’s meet**.
    - **Details.** The name, what it’s about, who created it (optional, shown as "Created by"), **No earlier than** / **No later than** (half-hour steps), and the time zone those hours are in.
 2. **Add availability** on the meeting page (`/m/:id`): just a name, no password. This device remembers you for that meeting. Typing the same name on another device picks your answers back up.
-3. **Mark your times.** Choose **Available**, **If needed** or **Unavailable**, then press on a half-hour slot and drag a rectangle; every slot in it gets that mark (pressing a slot that already has it clears instead). Changes save as you go; **Done** goes back to the group view.
+3. **Mark your times.** Choose **Available**, **Maybe** or **Unavailable**, then press on a half-hour slot and drag a rectangle; every slot in it gets that mark (pressing a slot that already has it clears instead). Changes save as you go; **Done** goes back to the group view.
 4. **Group's availability.**
-   - Each half hour is shaded by how many people are free (if needed counts half).
-   - Hover over (or tap) a time to see who's available, who could if needed, and who can't.
+   - Each half hour is shaded by how many people are free (maybe counts half). Every meeting shows half-hour rows; older 15-minute meetings show two slots per row.
+   - Hover over (or tap) a time to see who's available, who said maybe, and who can't.
    - Tap a name under **Responses** to see only that person's times.
    - "Best time so far" shows the longest stretch with the most people.
    - Every viewer sees the times converted to their own time zone, and can switch to any other.

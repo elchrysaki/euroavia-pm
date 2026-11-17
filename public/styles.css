@@ -1952,3 +1952,71 @@ body:has(.flow) #app, body:has(.flow) .topbar, body:has(.flow) .action-bar { vis
 .vote-btn { min-height: 2.75rem !important; padding: 0 1rem !important; font-size: 1rem !important; font-weight: 700; font-variant-numeric: tabular-nums; }
 .activity .title { font-size: 1.0625rem; }
 .activity .meta { font-size: 0.875rem; }
+
+/* ---- The logo is the word: "Wingman" in Michroma (a wide, aerospace-style face, OFL) with a
+   brushed-metal finish: blue steel on light backgrounds, polished chrome on dark ones. ---- */
+@font-face { font-family: "Michroma"; src: url("/fonts/michroma.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+.topbar .brand-mark { display: none; }
+.topbar .brand .wordmark, .wordmark {
+  font-family: "Michroma", var(--font); font-weight: 400; font-size: 1.1875rem; letter-spacing: 0.04em; line-height: 1;
+  background: linear-gradient(180deg, #5f86c4 0%, #1c3f78 46%, #0b2552 52%, #3c66a8 78%, #16325f 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.85));
+  padding: 0.25rem 0;
+}
+@media (prefers-color-scheme: dark) {
+  .topbar .brand .wordmark, .wordmark {
+    background-image: linear-gradient(180deg, #ffffff 0%, #dce8f8 44%, #8ea6c7 52%, #e6efff 74%, #a9bcd6 100%);
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+  }
+}
+@media (max-width: 380px) { .topbar .brand .wordmark { font-size: 1rem; } }
+
+/* ---- Trip days: one type scale, nothing under 14px (accessibility) ----
+   34 title · 28 route dates · 24 best date · 18 section/month/place headings · 17 body & names ·
+   15 secondary text · 14 labels (caps) and chips. */
+.event-layout .eyebrow, .people-label, .verdict-label, .route small, .name-list h4, .tally span,
+.event-layout .section-header { font-size: 0.875rem !important; letter-spacing: 0.06em; }
+.route small { font-weight: 700; }
+.route span, .month h3 small, .legend, .legend span, .event-meta .pill, .activity .meta, .activity .meta span,
+.place-main > span:not(.place-bar), .verdict-sub, .sheet-sub, .cal-toolbar .legend { font-size: 0.9375rem !important; }
+.weekdays span { font-size: 0.875rem !important; }
+.linkchip { font-size: 0.875rem !important; padding: 0.25rem 0.625rem !important; }
+.people-chips .person, .name-chip, .activity .title, .who-list li { font-size: 1.0625rem !important; }
+.activity-group h3, .month h3, .place-main b { font-size: 1.125rem !important; }
+.activity-group h3 { font-weight: 700; }
+.days .day { font-size: 1rem !important; }
+.avatar.sm { font-size: 0.75rem; }
+.event-layout .subtitle { font-size: 1.0625rem; }
+/* answer flow + day picker: same scale */
+.flow .eyebrow, .flow .preview-label { font-size: 0.875rem !important; }
+.dl-text span, .flow .status, .flow .status b, .dp-sub, .dp-foot span, .dp-foot { font-size: 0.9375rem !important; }
+.dp-weekdays span { font-size: 0.875rem !important; }
+.dp .month-quick button, .month-quick button { font-size: 0.875rem !important; min-height: 2rem; padding: 0.25rem 0.75rem !important; }
+.dp .segmented button, .flow .segmented button { font-size: 0.9375rem !important; }
+.chip .count { font-size: 0.875rem !important; }
+
+/* ---- Best date: tap it (or "More dates") to expand the next best dates ---- */
+.verdict-toggle { display: flex; align-items: center; gap: 0.5rem; width: 100%; border: 0; background: none; padding: 0; margin: 0.375rem 0 0.25rem; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.verdict-toggle:disabled { cursor: default; }
+.verdict-toggle .verdict-date { margin: 0; }
+.verdict-chev { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex: none; border-radius: 50%; background: var(--flat-fill); color: var(--accent); transition: transform .25s var(--ease); }
+.verdict.open .verdict-chev { transform: rotate(180deg); }
+@media (hover: hover) { .verdict-toggle:not(:disabled):hover .verdict-chev { background: var(--flat-fill-hover); } }
+.verdict-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.75rem; }
+.verdict-actions .btn { margin: 0 !important; min-height: 2.75rem; font-size: 1rem; }
+.best-list { list-style: none; margin: 1rem 0 0; padding: 0.375rem 0 0; display: grid; border-top: 1px solid var(--flat-line); }
+.best-row { width: 100%; display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) 5.5rem; align-items: center; gap: 0.875rem; padding: 0.75rem 0.25rem; border: 0; border-radius: 12px; background: none; font: inherit; color: var(--label); text-align: left; cursor: pointer; }
+.best-row:hover { background: var(--pill-hover); }
+.best-list li + li .best-row { box-shadow: 0 -1px 0 var(--flat-line); border-radius: 0; }
+.best-rank { width: 2.25rem; height: 2.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--flat-fill); color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
+.best-main { display: grid; gap: 0.125rem; min-width: 0; }
+.best-main b { font-size: 1.0625rem; }
+.best-main span { font-size: 0.9375rem; color: var(--label-2); }
+.best-bar { height: 6px; border-radius: 999px; background: var(--flat-fill); overflow: hidden; }
+.best-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+@media (max-width: 480px) { .best-row { grid-template-columns: 2.25rem minmax(0, 1fr); } .best-bar { display: none; } }
+.form-hint { margin: 0.75rem 0 0; font-size: 0.9375rem; color: var(--label-2); } .form-hint .btn-link { font-size: inherit; }
+.topbar .brand .wordmark { font-size: 1.3125rem; letter-spacing: 0.02em; -webkit-text-stroke: 0.6px #123468; background-image: linear-gradient(180deg, #8fb0e0 0%, #2a5498 40%, #0a2350 52%, #4c7cc4 72%, #1a3a70 100%); }
+@media (prefers-color-scheme: dark) { .topbar .brand .wordmark { -webkit-text-stroke: 0.5px rgba(230, 240, 255, 0.55); background-image: linear-gradient(180deg, #ffffff 0%, #e4eefb 40%, #8ea6c7 52%, #f0f6ff 72%, #a9bcd6 100%); } }
+@media (max-width: 380px) { .topbar .brand .wordmark { font-size: 1.0625rem; } }
