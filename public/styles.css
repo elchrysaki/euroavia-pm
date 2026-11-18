@@ -1486,7 +1486,7 @@ html[data-perf="lite"] .tool-card { transition: none; }
     box-shadow: inset 0 1px 0 var(--hl-soft, rgba(255,255,255,.5));
   }
   .tabbar a { flex: 1; flex-direction: column; gap: 0.125rem; font-size: 0.6875rem; min-height: 2.75rem; }
-  .toast { bottom: calc(4.5rem + var(--safe-b)); }
+  /* (the old bottom tab bar is gone: toasts stay at the top) */
 }
 @media (min-width: 720px) {
   .tabbar {
@@ -2298,3 +2298,20 @@ html[data-perf] .people-fold, html[data-perf] .people-fold::details-content { ba
 /* smooth mode cards: the same see-through blue as full mode, just without the blur */
 @media (prefers-color-scheme: dark) { html[data-perf="lite"] .card { background: rgba(28, 56, 110, 0.5) !important; } }
 html[data-perf] .card.people-fold, html[data-perf] details.people-fold { background: none !important; }
+
+/* best dates, once the dates are saved: a small note that opens the full card */
+.best-note { display: flex; align-items: center; gap: 0.625rem; width: 100%; margin-bottom: 1.25rem; padding: 0.75rem 1rem; border: 0; border-radius: 14px; background: var(--flat-fill); color: var(--label-2); font: inherit; font-size: 0.9375rem; text-align: left; cursor: pointer; }
+.best-note:hover { background: var(--flat-fill-hover); }
+.best-note svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
+.best-note span:nth-child(2) { flex: 1; min-width: 0; }
+.best-note b { color: var(--label); font-weight: 600; }
+.best-note-go { font-size: 1.25rem; color: var(--label-3); }
+.best-hide { margin-left: auto; font-size: 0.875rem; text-transform: none; letter-spacing: 0; }
+.verdict-label { display: flex; align-items: center; }
+.toast { border-radius: 18px; bottom: auto; }
+.select-bar .btn { white-space: nowrap; }
+@media (max-width: 420px) {
+  .select-bar { gap: 0.25rem; padding-left: 0.875rem; max-width: calc(100vw - 1.5rem); }
+  .select-bar .btn { padding: 0 0.75rem; font-size: 0.9375rem; min-height: 2.75rem; }
+  .select-bar #selClear { padding: 0 0.5rem; }
+}

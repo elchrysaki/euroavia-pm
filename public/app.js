@@ -1873,7 +1873,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     }),
   );
   $("#selClear").onclick = exitSelectMode;
-  $("#selShow").onclick = () => current.selected.size && (tripLen() > 1 ? openCompareSheet() : openDaySheet([...current.selected].sort()));
+  $("#selShow").onclick = () => current.selected.size && openDaySheet([...current.selected].sort());
   if ($("#selFinal")) $("#selFinal").onclick = () => current.selected.size && setFinalDates([...current.selected].sort());
   bindFinalTrip(event);
   renderTab();
@@ -1933,8 +1933,10 @@ function calendarHtml() {
   return `
     ${
       top
-        ? `<div class="card verdict${current.moreBest ? " open" : ""}">
-        <div class="verdict-label">${icon("plane")} Best ${lenWord} so far</div>
+        ? event.final?.dates?.length && !current.showBest
+          ? `<button type="button" class="best-note" id="showBest">${icon("plane")}<span>Best ${lenWord} so far: <b>${esc(when(top))}</b> · ${top.yes + top.maybe} of ${n}</span><span class="best-note-go" aria-hidden="true">›</span></button>`
+          : `<div class="card verdict${current.moreBest ? " open" : ""}">
+        <div class="verdict-label">${icon("plane")} Best ${lenWord} so far${event.final?.dates?.length ? '<button type="button" class="btn-link best-hide" id="hideBest">Hide</button>' : ""}</div>
         <button type="button" class="verdict-toggle" id="moreBest" aria-expanded="${!!current.moreBest}" aria-controls="bestList" ${best.length > 1 ? "" : "disabled"}>
           <span class="verdict-date">${esc(when(top))}</span>
           ${best.length > 1 ? `<span class="verdict-chev" aria-hidden="true">${CHEVRON}</span>` : ""}
@@ -1967,7 +1969,7 @@ function calendarHtml() {
     }
     <div class="cal-toolbar">
       <div class="legend"><span>0/${n}</span><span class="legend-scale">${legend}</span><span>${n}/${n} available</span></div>
-      <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} ${L === 1 ? "Compare dates" : `Compare ${lenWord}`}</button>
+      <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} Select dates</button>
     </div>
     ${monthsHtml(eventRange(event), (date) => {
       const s = days.get(date);
@@ -1992,6 +1994,10 @@ function bindCalendar() {
       $('[data-seg="tabs"] [data-value="destinations"]')?.click();
       setTimeout(() => $('[data-form="place"] input')?.focus(), 50);
       return;
+    }
+    if (e.target.closest("#showBest, #hideBest")) {
+      current.showBest = !!e.target.closest("#showBest");
+      return renderTab();
     }
     if (e.target.closest("#moreBest, [data-more-best]")) {
       current.moreBest = !current.moreBest;
@@ -2074,7 +2080,7 @@ function bestWindows(L, limit = 6) {
 function paintSelection() {
   const L = tripLen();
   const on = new Set();
-  for (const d of current.selected) for (const x of windowFrom(d, L)) on.add(x);
+  for (const d of current.selected) on.add(d); // single days: pick any you like
   $$("#tabBody .day[data-date]").forEach((el) => el.classList.toggle("selected", on.has(el.dataset.date)));
 }
 /** Compare several stretches side by side. */
@@ -2113,7 +2119,7 @@ function enterSelectMode() {
   current.selectMode = true;
   const t = $("#selectToggle");
   if (t) t.innerHTML = `${icon("x").replace("<svg", '<svg width="16" height="16"')} Done`;
-  toast(tripLen() > 1 ? `Tap the first day of each ${tripLen() === 7 ? "week" : `${tripLen()}-day option`} to compare` : "Tap the days you want to compare");
+  toast("Tap the days you want");
   updateSelectBar();
 }
 function exitSelectMode() {
@@ -2130,9 +2136,8 @@ function updateSelectBar() {
   if (!bar) return;
   const n = current.selected.size;
   const L = tripLen();
-  $("#selCount").textContent = L > 1 ? `${n} ${n === 1 ? "option" : "options"}` : `${n} ${n === 1 ? "day" : "days"}`;
-  if ($("#selShow")) $("#selShow").textContent = L > 1 ? "Compare" : "Who’s free?";
-  if ($("#selFinal")) $("#selFinal").hidden = L > 1;
+  void L;
+  $("#selCount").textContent = `${n} ${n === 1 ? "day" : "days"}`;
   bar.classList.toggle("show", current.selectMode && n > 0);
   document.body.classList.toggle("selecting", current.selectMode);
 }
