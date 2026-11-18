@@ -179,6 +179,26 @@ function parsePerms(v) {
   }
   return { final: o.final !== false, remove: o.remove !== false };
 }
+/**
+ * What the calendar entry says (the host can change it any time; empty = the event's own title and
+ * description): { title, description, places[], activities[], mode: "period" | "days" }.
+ */
+function cleanCal(v) {
+  let o = {};
+  try {
+    o = typeof v === "string" ? JSON.parse(v) : v || {};
+  } catch {
+    o = {};
+  }
+  const list = (a, max, len) => [...new Set((Array.isArray(a) ? a : []).map((x) => cleanText(x, len)).filter(Boolean))].slice(0, max);
+  return {
+    title: cleanText(o.title, 120),
+    description: typeof o.description === "string" ? o.description.replace(/\r/g, "").trim().slice(0, 1000) : "",
+    places: list(o.places, 10, 80),
+    activities: list(o.activities, 15, 120),
+    mode: o.mode === "days" ? "days" : "period",
+  };
+}
 /** How long the trip is, in days (the best-dates search looks for this many days in a row). */
 const cleanTripDays = (v) => Math.min(14, Math.max(1, Math.round(Number(v) || 1)));
 /** Adds one line to an event's change log (kept short: the latest 40). */
@@ -196,7 +216,7 @@ const isHost = (request, event) => {
 /** Loads an event; deletes it if it has expired; records this visit (keeps it alive). */
 async function getEvent(env, id, { touch = true } = {}) {
   const row = await env.DB.prepare(
-    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final, trip_days, log, perms FROM events WHERE id = ?",
+    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final, trip_days, log, perms, cal FROM events WHERE id = ?",
   )
     .bind(id)
     .first();
@@ -221,6 +241,7 @@ async function getEvent(env, id, { touch = true } = {}) {
   }
   event.trip_days = cleanTripDays(event.trip_days);
   event.perms = parsePerms(event.perms);
+  event.cal = cleanCal(event.cal);
   // a small change log: who removed whom, who saved or unsaved the date
   try {
     event.log = event.log ? JSON.parse(event.log) : [];
@@ -312,7 +333,7 @@ async function handleApi(request, env, url) {
       updated_at: r.updated_at,
       ...JSON.parse(r.data),
     }));
-    return json({ event, responses, host: isHost(request, event) });
+    return json({ event, responses, host: isHost(request, event), hasHost: !!event.admin_token });
   }
 
   // PATCH /api/events/:id
@@ -327,6 +348,12 @@ async function handleApi(request, env, url) {
       return fail("Only the person who created this event can change its settings.", 403);
     if (body && "final" in body && !event.perms.final && !isHost(request, event))
       return fail("Only the host can save the date for this event.", 403);
+    // the calendar entry: the host's to change (anyone, for events made before hosts existed)
+    if (body && "cal" in body) {
+      if (event.admin_token && !isHost(request, event)) return fail("Only the person who created this event can change the calendar entry.", 403);
+      out.cal = cleanCal(body.cal);
+      await env.DB.prepare("UPDATE events SET cal = ? WHERE id = ?").bind(JSON.stringify(out.cal), eventId).run();
+    }
     if (body && "perms" in body) {
       out.perms = parsePerms(body.perms);
       await env.DB.prepare("UPDATE events SET perms = ? WHERE id = ?").bind(JSON.stringify(out.perms), eventId).run();
@@ -421,7 +448,7 @@ function ensureSchema(env) {
   ])
     .then(async () => {
       // databases created by older versions: add the newer columns (fails harmlessly if present)
-      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"], ["trip_days", "INTEGER"], ["log", "TEXT"], ["perms", "TEXT"]]) {
+      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"], ["trip_days", "INTEGER"], ["log", "TEXT"], ["perms", "TEXT"], ["cal", "TEXT"]]) {
         await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} ${type}`).run().catch(() => {});
       }
     })

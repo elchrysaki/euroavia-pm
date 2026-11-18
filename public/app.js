@@ -292,38 +292,55 @@ const daysInRange = (a, b) => Math.round((parseDate(b) - parseDate(a)) / 86_400_
 const icsText = (v) => String(v || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 const icsUtc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 const icsDay = (date) => date.replace(/-/g, "");
-/**
- * items: [{ title, details, url, allDay: { start, end } }] (dates, end inclusive)
- *     or [{ title, details, url, start: Date, end: Date }] (a timed event)
+/*
+ * A calendar entry: { title, location, details, url, blocks, daily }
+ *   blocks: [{ allDay: { start, end } }] (dates, end inclusive) or [{ start: Date, end: Date }] (a timed event)
+ *   daily:  for "one event per day" over consecutive days, the number of days (Google repeats the event)
  */
-function downloadIcs(filename, items) {
+function entryText(e) {
+  return [e.details, e.url].filter(Boolean).join("\n\n");
+}
+/** The one span Google / Microsoft get: the whole period (their links take a single event). */
+function entrySpan(e) {
+  const b = e.blocks;
+  if (b[0].allDay) return { allDay: { start: b[0].allDay.start, end: b[b.length - 1].allDay.end } };
+  return { start: b[0].start, end: b[b.length - 1].end };
+}
+function downloadIcs(e) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Wingman//Group planner//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
-  items.forEach((it, i) => {
+  e.blocks.forEach((it, i) => {
     lines.push("BEGIN:VEVENT", `UID:${Date.now()}-${i}-${Math.random().toString(36).slice(2)}@wingman`, `DTSTAMP:${icsUtc(new Date())}`);
     if (it.allDay) lines.push(`DTSTART;VALUE=DATE:${icsDay(it.allDay.start)}`, `DTEND;VALUE=DATE:${icsDay(addDays(it.allDay.end, 1))}`);
     else lines.push(`DTSTART:${icsUtc(it.start)}`, `DTEND:${icsUtc(it.end)}`);
-    lines.push(`SUMMARY:${icsText(it.title)}`);
-    if (it.details) lines.push(`DESCRIPTION:${icsText(it.details)}`);
-    if (it.url) lines.push(`URL:${it.url}`);
+    lines.push(`SUMMARY:${icsText(e.title)}`);
+    if (e.location) lines.push(`LOCATION:${icsText(e.location)}`);
+    if (e.details) lines.push(`DESCRIPTION:${icsText(e.details)}`);
+    if (e.url) lines.push(`URL:${e.url}`);
     lines.push("END:VEVENT");
   });
   lines.push("END:VCALENDAR");
   const blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/calendar;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${filename.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "event"}.ics`;
+  a.download = `${e.title.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "event"}.ics`;
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
-function googleCalUrl(it) {
+function googleCalUrl(e) {
+  // one event per consecutive day: the first day, repeated daily; otherwise the whole period
+  const it = e.daily ? e.blocks[0] : entrySpan(e);
   const dates = it.allDay ? `${icsDay(it.allDay.start)}/${icsDay(addDays(it.allDay.end, 1))}` : `${icsUtc(it.start)}/${icsUtc(it.end)}`;
-  const q = new URLSearchParams({ action: "TEMPLATE", text: it.title, dates, details: [it.details, it.url].filter(Boolean).join("\n\n") });
+  const q = new URLSearchParams({ action: "TEMPLATE", text: e.title, dates, details: entryText(e) });
+  if (e.location) q.set("location", e.location);
+  if (e.daily) q.set("recur", `RRULE:FREQ=DAILY;COUNT=${e.daily}`);
   return `https://calendar.google.com/calendar/render?${q}`;
 }
-function outlookUrl(it, host = "outlook.live.com") {
-  const q = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: it.title, body: [it.details, it.url].filter(Boolean).join("\n\n") });
+function outlookUrl(e) {
+  const it = entrySpan(e);
+  const q = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: e.title, body: entryText(e) });
+  if (e.location) q.set("location", e.location);
   if (it.allDay) {
     q.set("startdt", it.allDay.start);
     q.set("enddt", addDays(it.allDay.end, 1));
@@ -332,36 +349,19 @@ function outlookUrl(it, host = "outlook.live.com") {
     q.set("startdt", it.start.toISOString());
     q.set("enddt", it.end.toISOString());
   }
-  return `https://${host}/calendar/0/action/compose?${q}`;
+  return `https://outlook.live.com/calendar/0/action/compose?${q}`;
 }
-/** "Add to calendar": one button, then pick Google, Apple, Microsoft Outlook (personal or work) or a file. */
-function openAddToCalendar(filename, items) {
-  const many = items.length > 1;
-  const note = many ? `<p class="sheet-sub cal-note">These dates are in ${items.length} separate blocks. Apple Calendar and the file add all of them; Google and Outlook open one block at a time.</p>` : "";
-  const per = (fn) =>
-    many
-      ? items.map((it) => `<a class="cal-sub" href="${esc(fn(it))}" target="_blank" rel="noopener noreferrer">${esc(fmtRunLong(it.allDay))}</a>`).join("")
-      : "";
+/** "Add to calendar": Google, Apple, Microsoft — one each. */
+function openAddToCalendar(e) {
   openSheet(`
-    <div class="sheet-head"><div><h2>Add to calendar</h2><div class="sheet-sub">${esc(filename)}</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
-    ${note}
+    <div class="sheet-head"><div><h2>Add to calendar</h2><div class="sheet-sub">${esc(e.title)}</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
     <div class="cal-menu">
-      <a class="cal-opt" ${many ? "" : `href="${esc(googleCalUrl(items[0]))}" target="_blank" rel="noopener noreferrer"`} data-cal="google">
-        <span class="cal-ico g">G</span><span><b>Google Calendar</b><small>Opens Google Calendar with it filled in</small></span></a>
-      ${per(googleCalUrl)}
-      <button type="button" class="cal-opt" data-cal="apple"><span class="cal-ico a">${icon("calendar")}</span><span><b>Apple Calendar</b><small>iPhone, iPad and Mac</small></span></button>
-      <a class="cal-opt" ${many ? "" : `href="${esc(outlookUrl(items[0]))}" target="_blank" rel="noopener noreferrer"`} data-cal="outlook">
-        <span class="cal-ico o">O</span><span><b>Microsoft Outlook</b><small>Outlook.com, Hotmail, Live</small></span></a>
-      ${per((it) => outlookUrl(it))}
-      <a class="cal-opt" ${many ? "" : `href="${esc(outlookUrl(items[0], "outlook.office.com"))}" target="_blank" rel="noopener noreferrer"`} data-cal="m365">
-        <span class="cal-ico o">O</span><span><b>Outlook for work or school</b><small>Microsoft 365</small></span></a>
-      ${per((it) => outlookUrl(it, "outlook.office.com"))}
-      <button type="button" class="cal-opt" data-cal="ics"><span class="cal-ico f">${icon("arrow")}</span><span><b>Download a calendar file</b><small>.ics — works with any calendar app</small></span></button>
+      <a class="cal-opt" href="${esc(googleCalUrl(e))}" target="_blank" rel="noopener noreferrer"><span class="cal-ico g">G</span><span><b>Google</b></span></a>
+      <button type="button" class="cal-opt" data-cal="apple"><span class="cal-ico a">${icon("calendar")}</span><span><b>Apple</b></span></button>
+      <a class="cal-opt" href="${esc(outlookUrl(e))}" target="_blank" rel="noopener noreferrer"><span class="cal-ico o">M</span><span><b>Microsoft</b></span></a>
     </div>`);
-  const wrap = $(".sheet-wrap");
-  // Apple Calendar opens .ics files directly (iPhone / Mac); the file option is the same for other apps
-  $$('[data-cal="apple"], [data-cal="ics"]', wrap).forEach((b) => b.addEventListener("click", () => downloadIcs(filename, items)));
-  if (many) $$('a.cal-opt', wrap).forEach((a) => a.addEventListener("click", (e) => (e.preventDefault(), a.nextElementSibling?.focus())));
+  // Apple Calendar opens the .ics file directly on iPhone, iPad and Mac
+  $('[data-cal="apple"]', $(".sheet-wrap")).addEventListener("click", () => downloadIcs(e));
 }
 /** Consecutive dates grouped into runs: ["2027-04-10","2027-04-11","2027-04-14"] → [{start,end},{start,end}] */
 function dateRuns(dates) {
@@ -1045,7 +1045,7 @@ let meetPromise = null;
 function meetModule() {
   app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   meetPromise ||= import("/meet.js?v=" + ((document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1] || "1")).then((m) => {
-    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet, downloadIcs, googleCalUrl, openAddToCalendar, actorName, changeLogHtml, ago });
+    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet, openAddToCalendar, actorName, changeLogHtml, ago });
     return m;
   });
   return meetPromise.catch((err) => {
@@ -1707,6 +1707,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   if (!tabs.some(([v]) => v === prevTab)) prevTab = current.tab = "calendar";
   const host = !!data.host;
   current.host = host;
+  current.hasHost = data.hasHost !== false;
   const perms = event.perms || { final: true, remove: true };
   const canRemove = host || perms.remove;
   current.canSave = host || perms.final;
@@ -1763,6 +1764,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
             <select data-trip-days>${TRIP_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (event.trip_days || 1) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
           <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
+          <div class="host-row"><span><b>Calendar entry</b><small>Label, place, activities and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
           <div class="host-sub">Everyone can…</div>
           <label class="toggle-row"><span><b>Save the date</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms.final ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms.remove ? "checked" : ""} /></label>
@@ -1812,6 +1814,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     }),
   );
   $(".people-fold")?.addEventListener("toggle", (e) => (current.peopleOpen = e.target.open));
+  $("[data-cal-edit-host]")?.addEventListener("click", () => openCalEditor(event));
   $(".host-card")?.addEventListener("toggle", (e) => (current.hostOpen = e.target.open));
   // host: what everyone may do
   $$("[data-perm]").forEach((box) =>
@@ -2241,6 +2244,16 @@ function changeLogHtml(log, fmtWhat = (e) => (e.dates?.length ? dateRuns(e.dates
 }
 
 /* ---- The decided date(s) ---- */
+/** The host edits the calendar entry (events made before hosts existed: anyone). */
+const canEditCal = (event) => current.host || !current.hasHost;
+function calSummaryHtml(event) {
+  const cal = event.cal || {};
+  const bits = [];
+  if (cal.title && cal.title !== event.title) bits.push(`<span class="cs-row"><b>Label</b>${esc(cal.title)}</span>`);
+  if (cal.places?.length) bits.push(`<span class="cs-row">${icon("pin")}${esc(cal.places.join(", "))}</span>`);
+  if (cal.activities?.length) bits.push(`<span class="cs-row">${icon("sparkles")}${esc(cal.activities.join(", "))}</span>`);
+  return bits.length ? `<div class="cal-summary">${bits.join("")}</div>` : "";
+}
 function finalTripHtml(event, host) {
   const f = event.final;
   if (!f?.dates?.length) return "";
@@ -2259,21 +2272,114 @@ function finalTripHtml(event, host) {
     <div class="final-label">${icon("check")} It’s decided</div>
     <div class="final-when">${runs.map((r) => `<span>${esc(fmtRunLong(r))}</span>`).join("")}</div>
     <div class="final-sub">${n} ${n === 1 ? "day" : "days"} · ${all} definitely${some ? ` · ${some} maybe` : ""}</div>
+    ${calSummaryHtml(event)}
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
+      ${canEditCal(event) ? '<button type="button" class="btn btn-tinted" data-cal-edit>Edit calendar entry</button>' : ""}
       ${current.canSave ? '<button type="button" class="btn btn-plain" data-final-clear>Unsave these dates</button>' : ""}
     </div>
   </div>`;
 }
-function tripCalItems(event) {
-  const url = `${location.origin}/e/${event.id}`;
-  return dateRuns(event.final.dates).map((r) => ({ title: event.title, details: event.description || "Planned with Wingman", url, allDay: r }));
+function tripCalEntry(event) {
+  const cal = event.cal || {};
+  const dates = [...event.final.dates].sort();
+  const runs = dateRuns(dates);
+  const perDay = cal.mode === "days";
+  const notes = [cal.description || event.description || "Planned with Wingman"];
+  if (cal.activities?.length) notes.push(`Activities: ${cal.activities.join(", ")}`);
+  // a period with gaps: say which days, since the event covers first to last
+  if (!perDay && runs.length > 1) notes.push(`Days: ${runs.map(fmtRunLong).join("; ")}`);
+  return {
+    title: cal.title || event.title,
+    location: (cal.places || []).join(", "),
+    details: notes.join("\n\n"),
+    url: `${location.origin}/e/${event.id}`,
+    blocks: perDay ? dates.map((d) => ({ allDay: { start: d, end: d } })) : [{ allDay: { start: dates[0], end: dates[dates.length - 1] } }],
+    daily: perDay && runs.length === 1 && dates.length > 1 ? dates.length : null,
+  };
+}
+
+/** The host edits what the calendar entry says: label, places, activities, description, period or days. */
+function openCalEditor(event) {
+  const cal = { title: "", description: "", places: [], activities: [], mode: "period", ...(event.cal || {}) };
+  const listedPlaces = current.agg.destinations.map((d) => d.name);
+  const listedActs = current.agg.activities.map((a) => a.title);
+  const pick = (kind, items) => {
+    const chosen = new Set(cal[kind].map((x) => x.toLowerCase()));
+    const all = [...items, ...cal[kind].filter((x) => !items.some((i) => i.toLowerCase() === x.toLowerCase()))];
+    return all.length
+      ? all.map((x) => `<button type="button" class="chip" data-pick="${kind}" data-v="${esc(x)}" aria-pressed="${chosen.has(x.toLowerCase())}">${esc(x)}</button>`).join("")
+      : `<p class="sheet-sub">None yet. Add your own below.</p>`;
+  };
+  const draw = () => {
+    $("#cePlaces").innerHTML = pick("places", listedPlaces);
+    $("#ceActs").innerHTML = pick("activities", listedActs);
+  };
+  openSheet(`
+    <div class="sheet-head"><div><h2>Calendar entry</h2><div class="sheet-sub">What people get when they add the saved dates to their calendar. Change it any time.</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    <form class="cal-editor" id="calEditor">
+      <label class="ce-field"><span>Label</span><input name="title" maxlength="120" placeholder="${esc(event.title)}" value="${esc(cal.title)}" /></label>
+      <div class="ce-field"><span>Place</span><div class="chips" id="cePlaces"></div>
+        <div class="add-row"><input id="cePlaceIn" maxlength="80" placeholder="Add any place" /><button type="button" class="btn btn-tinted" data-add="places">${icon("plus")} Add</button></div></div>
+      <div class="ce-field"><span>Activities</span><div class="chips" id="ceActs"></div>
+        <div class="add-row"><input id="ceActIn" maxlength="120" placeholder="Add any activity" /><button type="button" class="btn btn-tinted" data-add="activities">${icon("plus")} Add</button></div></div>
+      <label class="ce-field"><span>Description</span><textarea name="description" maxlength="1000" rows="3" placeholder="${esc(event.description || "Planned with Wingman")}">${esc(cal.description)}</textarea></label>
+      <div class="ce-field"><span>In the calendar as</span>
+        <div class="segmented" data-seg="cemode"><span class="thumb"></span>
+          <button type="button" data-value="period" aria-pressed="${cal.mode !== "days"}">One event, first to last day</button>
+          <button type="button" data-value="days" aria-pressed="${cal.mode === "days"}">One event per day</button>
+        </div></div>
+      <button class="btn btn-primary btn-block" type="submit">Save calendar entry</button>
+    </form>`);
+  const wrap = $(".sheet-wrap");
+  draw();
+  setupSegmented($('[data-seg="cemode"]', wrap), (v) => (cal.mode = v));
+  wrap.addEventListener("click", (e) => {
+    const chip = e.target.closest("[data-pick]");
+    if (chip) {
+      const kind = chip.dataset.pick;
+      const v = chip.dataset.v;
+      const i = cal[kind].findIndex((x) => x.toLowerCase() === v.toLowerCase());
+      if (i >= 0) cal[kind].splice(i, 1);
+      else cal[kind].push(v);
+      return draw();
+    }
+    const add = e.target.closest("[data-add]");
+    if (add) {
+      const kind = add.dataset.add;
+      const input = $(kind === "places" ? "#cePlaceIn" : "#ceActIn", wrap);
+      const v = input.value.trim().replace(/\s+/g, " ");
+      if (v && !cal[kind].some((x) => x.toLowerCase() === v.toLowerCase())) cal[kind].push(v);
+      input.value = "";
+      draw();
+    }
+  });
+  ["#cePlaceIn", "#ceActIn"].forEach((sel) =>
+    $(sel, wrap).addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      e.target.nextElementSibling.click();
+    }),
+  );
+  $("#calEditor", wrap).addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const body = { cal: { ...cal, title: f.title.value.trim(), description: f.description.value.trim() } };
+    try {
+      await api(`/events/${event.id}`, { method: "PATCH", body });
+      closeSheet();
+      toast("Calendar entry saved");
+      await renderEvent(event.id, { keepTab: true, quiet: true });
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
 }
 function bindFinalTrip(event) {
   const card = $("#finalCard");
   if (!card) return;
-  const items = tripCalItems(event);
-  card.querySelector("[data-final-ics]").addEventListener("click", () => openAddToCalendar(event.title, items));
+  card.querySelector("[data-final-ics]").addEventListener("click", () => openAddToCalendar(tripCalEntry(event)));
+  card.querySelector("[data-cal-edit]")?.addEventListener("click", () => openCalEditor(event));
   card.querySelector("[data-final-clear]")?.addEventListener("click", async () => {
     if (!confirm("Unsave these dates? Everyone will see the group’s calendar again. This goes in the change log.")) return;
     const by = await actorName();

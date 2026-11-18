@@ -624,6 +624,7 @@ function paintBody() {
           M.host
             ? `<details class="card fold host-card"${M.hostOpen ? " open" : ""}>
           <summary><span>Host settings</span><small>Only you see this</small></summary>
+          <div class="host-row"><span><b>Calendar entry</b><small>Label, place and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
           <div class="host-sub">Everyone can…</div>
           <label class="toggle-row"><span><b>Save the time</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms().final ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms().remove ? "checked" : ""} /></label>
@@ -636,6 +637,7 @@ function paintBody() {
   $("#addAvail")?.addEventListener("click", startEditing);
   body.querySelector(".mtg-people")?.addEventListener("toggle", (e) => (M.peopleOpen = e.target.open));
   body.querySelector(".host-card")?.addEventListener("toggle", (e) => (M.hostOpen = e.target.open));
+  body.querySelector("[data-cal-edit-host]")?.addEventListener("click", openCalEditor);
   body.querySelectorAll("[data-perm]").forEach((box) =>
     box.addEventListener("change", async () => {
       const next = { ...perms(), [box.dataset.perm]: box.checked };
@@ -976,16 +978,47 @@ function fmtLogTime(start, end) {
 }
 
 /* ---- The decided time: everyone sees it and can add it to their calendar (in their own time zone) ---- */
+/** The calendar entry: the creator's label / place / description, or the meeting's own title and description. */
 function finalItem() {
   const f = M.meeting.final;
   if (!f) return null;
+  const cal = M.meeting.cal || {};
   return {
-    title: M.meeting.title,
-    details: M.meeting.description || "Planned with Wingman",
+    title: cal.title || M.meeting.title,
+    location: cal.location || "",
+    details: cal.description || M.meeting.description || "Planned with Wingman",
     url: `${location.origin}/m/${M.meeting.id}`,
     start: new Date(f.start * 60000),
     end: new Date(f.end * 60000),
   };
+}
+const canEditCal = () => M.host || M.hasHost === false;
+/** The creator edits what the calendar entry says, any time. */
+function openCalEditor() {
+  const { esc, icon } = K;
+  const cal = { title: "", location: "", description: "", ...(M.meeting.cal || {}) };
+  K.openSheet(`
+    <div class="sheet-head"><div><h2>Calendar entry</h2><div class="sheet-sub">What people get when they add the saved time to their calendar. Change it any time.</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    <form class="cal-editor" id="calEditor">
+      <label class="ce-field"><span>Label</span><input name="title" maxlength="120" placeholder="${esc(M.meeting.title)}" value="${esc(cal.title)}" /></label>
+      <label class="ce-field"><span>Place</span><input name="location" maxlength="200" placeholder="A room, an address or a video link" value="${esc(cal.location)}" /></label>
+      <label class="ce-field"><span>Description</span><textarea name="description" maxlength="1000" rows="3" placeholder="${esc(M.meeting.description || "Planned with Wingman")}">${esc(cal.description)}</textarea></label>
+      <button class="btn btn-primary btn-block" type="submit">Save calendar entry</button>
+    </form>`);
+  document.getElementById("calEditor").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const next = { title: f.title.value.trim(), location: f.location.value.trim(), description: f.description.value.trim() };
+    try {
+      const res = await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { cal: next } });
+      M.meeting.cal = res.cal || next;
+      K.closeSheet();
+      K.toast("Calendar entry saved");
+      paintBody();
+    } catch (err) {
+      K.toast(err.message, { error: true });
+    }
+  });
 }
 function finalHtml() {
   const { esc, icon } = K;
@@ -1008,8 +1041,16 @@ function finalHtml() {
     <div class="final-label">${icon("check")} It’s decided</div>
     <div class="final-when"><span>${esc(day)}</span><span>${esc(t(it.start))}–${esc(t(it.end))}</span></div>
     <div class="final-sub">Shown in ${esc(M.tz)} · ${yes} of ${M.people.length} available${maybe ? ` · ${maybe} maybe` : ""}</div>
+    ${
+      (M.meeting.cal?.title && M.meeting.cal.title !== M.meeting.title) || M.meeting.cal?.location
+        ? `<div class="cal-summary">${M.meeting.cal.title && M.meeting.cal.title !== M.meeting.title ? `<span class="cs-row"><b>Label</b>${esc(M.meeting.cal.title)}</span>` : ""}${
+            M.meeting.cal.location ? `<span class="cs-row">${icon("pin")}${esc(M.meeting.cal.location)}</span>` : ""
+          }</div>`
+        : ""
+    }
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
+      ${canEditCal() ? '<button type="button" class="btn btn-tinted" data-cal-edit>Edit calendar entry</button>' : ""}
       ${canSave() ? '<button type="button" class="btn btn-plain" data-final-clear>Unsave this time</button>' : ""}
     </div>
   </div>`;
@@ -1017,7 +1058,11 @@ function finalHtml() {
 function bindFinal() {
   const card = K.$("#mtgFinal");
   if (!card) return;
-  card.querySelector("[data-final-ics]").addEventListener("click", () => K.openAddToCalendar(M.meeting.title, [finalItem()]));
+  card.querySelector("[data-final-ics]").addEventListener("click", () => {
+    const it = finalItem();
+    K.openAddToCalendar({ title: it.title, location: it.location, details: it.details, url: it.url, blocks: [{ start: it.start, end: it.end }] });
+  });
+  card.querySelector("[data-cal-edit]")?.addEventListener("click", openCalEditor);
   card.querySelector("[data-final-clear]")?.addEventListener("click", () => {
     if (confirm("Unsave this time? Everyone will see the group grid again. This goes in the change log.")) setFinal(null);
   });

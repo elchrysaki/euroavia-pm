@@ -33,6 +33,21 @@ export async function freePin(env) {
   return randomId(10); // practically never: fall back to a long id
 }
 
+/** The calendar entry the creator can change: { title, description, location } (empty = the meeting's own). */
+function cleanCal(v) {
+  let o = {};
+  try {
+    o = typeof v === "string" ? JSON.parse(v) : v || {};
+  } catch {
+    o = {};
+  }
+  return {
+    title: clean(o.title, 120),
+    location: clean(o.location, 200),
+    description: typeof o.description === "string" ? o.description.replace(/\r/g, "").trim().slice(0, 1000) : "",
+  };
+}
+
 /** What everyone (not only the creator) may do: save the time, remove entries. Both on by default. */
 function parsePerms(v) {
   let o = {};
@@ -120,6 +135,7 @@ export function ensureMeetSchema(env) {
           "ALTER TABLE meetings ADD COLUMN final TEXT",
           "ALTER TABLE meetings ADD COLUMN log TEXT",
           "ALTER TABLE meetings ADD COLUMN perms TEXT",
+          "ALTER TABLE meetings ADD COLUMN cal TEXT",
         ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
       ),
     )
@@ -157,6 +173,7 @@ const publicMeeting = (m) => ({
   description: m.description || "",
   creator: m.creator || "",
   perms: parsePerms(m.perms),
+  cal: cleanCal(m.cal),
   log: (() => {
     try {
       return m.log ? JSON.parse(m.log) : [];
@@ -267,6 +284,7 @@ export async function handleMeetings(request, env, parts) {
       meeting: publicMeeting(m),
       people: results.map((r) => ({ id: r.id, name: r.name, slots: JSON.parse(r.slots), maybe: JSON.parse(r.maybe || "[]") })),
       host: isHost(request, m),
+      hasHost: !!m.admin_token,
     });
   }
 
@@ -317,6 +335,13 @@ export async function handleMeetings(request, env, parts) {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
     const b = await readJson(request);
+    // the calendar entry: the creator's to change, at any time
+    if (b && "cal" in b) {
+      if (m.admin_token && !isHost(request, m)) return fail("Only the person who created this meeting can change the calendar entry.", 403);
+      const cal = cleanCal(b.cal);
+      await env.DB.prepare("UPDATE meetings SET cal = ? WHERE id = ?").bind(JSON.stringify(cal), mid).run();
+      if (!("final" in b) && !("perms" in b)) return json({ cal });
+    }
     // the creator's settings: may everyone save the time / remove entries?
     if (b && "perms" in b) {
       if (!isHost(request, m)) return fail("Only the person who created this meeting can change its settings.", 403);
