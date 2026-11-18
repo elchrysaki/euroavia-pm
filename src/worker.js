@@ -230,7 +230,8 @@ function cleanCal(v) {
   };
 }
 /** How long the trip is, in days (the best-dates search looks for this many days in a row). */
-const cleanTripDays = (v) => Math.min(14, Math.max(1, Math.round(Number(v) || 1)));
+const cleanTripDays = (v) => Math.min(MAX_TRIP_DAYS, Math.max(1, Math.round(Number(v) || 1)));
+const MAX_TRIP_DAYS = 30;
 /** Adds one line to an event's change log (kept short: the latest 40). */
 async function addLog(env, event, entry) {
   const log = [{ at: Date.now(), by: cleanText(entry.by, LIMITS.name) || "Someone", ...entry, by: cleanText(entry.by, LIMITS.name) || "Someone" }, ...(event.log || [])].slice(0, 40);

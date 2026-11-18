@@ -1367,8 +1367,9 @@ function renderHome() {
             <button type="button" data-value="1" aria-pressed="true">1 day</button>
             <button type="button" data-value="2" aria-pressed="false">2 days</button>
             <button type="button" data-value="3" aria-pressed="false">3 days</button>
-            <button type="button" data-value="7" aria-pressed="false">1 week</button>
+            <button type="button" data-value="custom" aria-pressed="false">Custom</button>
           </div>
+          <div class="len-custom" id="lenCustom" hidden>${daysStepperHtml(5)}</div>
           <p class="len-hint">Wingman then looks for the best days in a row, not just the best single day. You can change it later.</p>
           <div class="section-header">Also ask about</div>
           <div class="group well toggles">
@@ -1400,7 +1401,14 @@ function renderHome() {
   const form = $("#createForm");
   const summary = $("#rangeSummary");
   let tripDays = 1;
-  setupSegmented($('[data-seg="len"]'), (v) => (tripDays = Number(v)));
+  const lenCustom = $("#lenCustom");
+  const customDays = bindDaysStepper(lenCustom, (n) => (tripDays = n));
+  setupSegmented($('[data-seg="len"]'), (v) => {
+    const custom = v === "custom";
+    lenCustom.hidden = !custom;
+    tripDays = custom ? customDays() : Number(v);
+    if (custom) $("input", lenCustom).focus({ preventScroll: true });
+  });
   // An Apple-style range calendar (like Calendar / Booking pickers): one month at a time; tap the first
   // day, then the last. The range is one continuous band between two filled circles. The presets
   // (3 / 6 months, 1 year) fill it in; any tap on the calendar makes it Custom.
@@ -1767,7 +1775,8 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
           <p>Only you see this. Change any of it at any time.</p>
           <div class="host-sub">The trip</div>
           <label class="host-len"><span><b>How long is the trip?</b><small>The best-dates search looks for this many days in a row</small></span>
-            <select data-trip-days>${TRIP_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (event.trip_days || 1) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+            <select data-trip-days>${tripLengthOptions(event.trip_days || 1)}</select></label>
+          <div class="host-len-custom" data-trip-custom hidden>${daysStepperHtml(event.trip_days || 1)}</div>
           <div class="host-row"><span><b>Calendar entry</b><small>Label, places, activities and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
           <div class="host-sub">Sections</div>
           <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
@@ -1841,15 +1850,31 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     }),
   );
   // host: how long the trip is
-  $("[data-trip-days]")?.addEventListener("change", async (e) => {
+  const saveTripDays = async (n) => {
     try {
-      await api(`/events/${event.id}`, { method: "PATCH", body: { trip_days: Number(e.target.value) } });
-      toast(`Now looking for the best ${e.target.selectedOptions[0].textContent.replace(/^1 /, "")}`);
+      await api(`/events/${event.id}`, { method: "PATCH", body: { trip_days: n } });
+      toast(`Now looking for the best ${n === 1 ? "day" : `${n} days in a row`}`);
       current.moreBest = false;
       await renderEvent(event.id, { keepTab: true, quiet: true });
     } catch (err) {
       toast(err.message, { error: true });
     }
+  };
+  const tripCustom = $("[data-trip-custom]");
+  let tripTimer = 0;
+  if (tripCustom)
+    bindDaysStepper(tripCustom, (n) => {
+      clearTimeout(tripTimer);
+      tripTimer = setTimeout(() => n !== event.trip_days && saveTripDays(n), 700);
+    });
+  $("[data-trip-days]")?.addEventListener("change", async (e) => {
+    if (e.target.value === "custom") {
+      tripCustom.hidden = false;
+      $("input", tripCustom).focus();
+      return;
+    }
+    tripCustom.hidden = true;
+    await saveTripDays(Number(e.target.value));
   });
   // host: turn Places / Activities on or off
   $$("[data-section]").forEach((box) =>
@@ -2086,7 +2111,7 @@ function bindCalendar() {
 }
 
 /* ---- Trip length: the best-dates search looks for this many days in a row ---- */
-const tripLen = () => Math.max(1, Math.min(14, Number(current?.event?.trip_days) || 1));
+const tripLen = () => Math.max(1, Math.min(MAX_TRIP_DAYS, Number(current?.event?.trip_days) || 1));
 /** The L days starting at date, cut at the end of the event's range. */
 function windowFrom(date, L) {
   const end = eventRange(current.event).end;
@@ -2283,6 +2308,48 @@ const TRIP_LENGTHS = [
   [10, "10 days"],
   [14, "2 weeks"],
 ];
+const MAX_TRIP_DAYS = 30;
+const daysLabel = (n) => (n === 1 ? "1 day" : `${n} days`);
+
+/** The Host settings choices: the usual lengths, the current one if it's custom, and Custom… */
+function tripLengthOptions(cur) {
+  const list = TRIP_LENGTHS.some(([v]) => v === cur) ? TRIP_LENGTHS : [...TRIP_LENGTHS, [cur, daysLabel(cur)]].sort((a, b) => a[0] - b[0]);
+  return `${list.map(([v, l]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`).join("")}<option value="custom">Custom…</option>`;
+}
+
+/** An Apple-style stepper: − [ 5 ] days + (1 to 30 days). */
+function daysStepperHtml(n) {
+  return `<div class="days-stepper">
+    <button type="button" class="step-btn" data-step="-1" aria-label="One day fewer">−</button>
+    <label><input type="number" inputmode="numeric" min="1" max="${MAX_TRIP_DAYS}" value="${n}" aria-label="Number of days" /><span>days</span></label>
+    <button type="button" class="step-btn" data-step="1" aria-label="One day more">+</button>
+  </div>`;
+}
+function bindDaysStepper(root, onChange) {
+  const input = $("input", root);
+  const unit = $("label span", root);
+  const get = () => Math.max(1, Math.min(MAX_TRIP_DAYS, Math.round(Number(input.value) || 1)));
+  const sync = () => {
+    const n = get();
+    unit.textContent = n === 1 ? "day" : "days";
+    $('[data-step="-1"]', root).disabled = n <= 1;
+    $('[data-step="1"]', root).disabled = n >= MAX_TRIP_DAYS;
+    return n;
+  };
+  $$(".step-btn", root).forEach((b) =>
+    b.addEventListener("click", () => {
+      input.value = Math.max(1, Math.min(MAX_TRIP_DAYS, get() + Number(b.dataset.step)));
+      onChange(sync());
+    }),
+  );
+  input.addEventListener("input", () => input.value !== "" && onChange(sync()));
+  input.addEventListener("change", () => {
+    input.value = get();
+    onChange(sync());
+  });
+  sync();
+  return get;
+}
 
 /** The change log: who removed whose entry, who saved or unsaved the dates. */
 function changeLogHtml(log, fmtWhat = (e) => (e.dates?.length ? dateRuns(e.dates).map(fmtRunLong).join(", ") : "")) {
@@ -3352,4 +3419,24 @@ if ("serviceWorker" in navigator && !/[?&]nosw\b/.test(location.search)) {
       location.reload();
     }
   });
+}
+
+// Cheap stand-in for body:has(.flow) style rules (those re-check the whole page on every change):
+// the full-screen steps, sheets and the day picker are always direct children of <body>.
+{
+  const sync = () => {
+    const b = document.body;
+    let flow = false, sheet = false, dp = false;
+    for (const el of b.children) {
+      const c = el.classList;
+      if (c.contains("flow")) flow = true;
+      else if (c.contains("sheet-wrap")) sheet = true;
+      else if (c.contains("dp-wrap")) dp = true;
+    }
+    b.classList.toggle("has-flow", flow);
+    b.classList.toggle("has-sheet", sheet);
+    b.classList.toggle("has-dp", dp);
+  };
+  new MutationObserver(sync).observe(document.body, { childList: true });
+  sync();
 }

@@ -28,7 +28,7 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
 
 People can edit their own response later from the same device. The device keeps a private token for this. There are no accounts.
 
-**Trip length.** When creating a trip (and later in Host settings) the host picks how long the trip is: 1 day, 2, 3, 4 or 5 days, a week, 10 days or 2 weeks. The best-dates search then looks for the best **stretch of that many days in a row** (who can make every day of it: definitely, or definitely-or-maybe), not the best single day, and offers up to 6 non-overlapping options. Tapping a day shows that day's people, like always; a switch at the top changes it to the stretch that starts there, and **Save** saves whichever one you're looking at (one day, or e.g. a whole weekend). **Compare** then picks whole stretches: tap the first day of each, then **Compare** shows them side by side, best first.
+**Trip length.** When creating a trip (and later in Host settings) the host picks how long the trip is: 1, 2 or 3 days, or **Custom** (a − / + stepper, 1 to 30 days). Host settings also offer 4, 5, 7, 10 and 14 days. The best-dates search then looks for the best **stretch of that many days in a row** (who can make every day of it: definitely, or definitely-or-maybe), not the best single day, and offers up to 6 non-overlapping options. Tapping a day shows that day's people, like always; a switch at the top changes it to the stretch that starts there, and **Save** saves whichever one you're looking at (one day, or e.g. a whole weekend). **Compare** then picks whole stretches: tap the first day of each, then **Compare** shows them side by side, best first.
 
 **It's a date.** Anyone can save the date: tap a day or stretch and **Save these dates**, or pick days in Compare and **Save dates**. Meetings: **Save this time** on the best time, or on any time you tap. Everyone who opens it (by link or PIN) then sees an **It's a date** card at the top until the event is deleted, with one **Add to calendar** button that offers **Google**, **Apple** (an .ics file, which iPhone, iPad and Mac open in Calendar) and **Microsoft** (Outlook). Trips go in as all-day dates; meetings as a timed event in UTC, so every calendar shows it in its own time zone. Anyone can **Unsave** it.
 
@@ -110,6 +110,8 @@ The look is cool steel adapted to the light theme:
 - **Details:** chrome-coin medals, slider-channel bars, chrome title text and engraved labels.
 
 All shadow stacks are CSS variables at the end of `public/styles.css`. Smooth mode swaps in lighter stacks.
+
+**Small screens.** On phones, tablets and touch screens the boxes keep their see-through colours but drop the live blur behind them, the drifting background glow and looping shimmer stop, and a lighter background image is used, so scrolling stays smooth.
 
 ## How long events are kept
 
