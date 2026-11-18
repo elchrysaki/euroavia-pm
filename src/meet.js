@@ -33,6 +33,12 @@ export async function freePin(env) {
   return randomId(10); // practically never: fall back to a long id
 }
 
+/** About how long the meeting is (minutes, 30-min steps up to 8 h; 0 = not set). */
+const cleanDuration = (v) => {
+  const n = Math.round((Number(v) || 0) / 30) * 30;
+  return Math.max(0, Math.min(480, n));
+};
+
 /** The calendar entry the creator can change: { title, description, location } (empty = the meeting's own). */
 function cleanCal(v) {
   let o = {};
@@ -136,6 +142,7 @@ export function ensureMeetSchema(env) {
           "ALTER TABLE meetings ADD COLUMN log TEXT",
           "ALTER TABLE meetings ADD COLUMN perms TEXT",
           "ALTER TABLE meetings ADD COLUMN cal TEXT",
+          "ALTER TABLE meetings ADD COLUMN duration INTEGER",
         ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
       ),
     )
@@ -174,6 +181,7 @@ const publicMeeting = (m) => ({
   creator: m.creator || "",
   perms: parsePerms(m.perms),
   cal: cleanCal(m.cal),
+  duration: cleanDuration(m.duration),
   log: (() => {
     try {
       return m.log ? JSON.parse(m.log) : [];
@@ -263,9 +271,9 @@ export async function handleMeetings(request, env, parts) {
     const admin = randomId(24);
     const now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO meetings (id, title, description, creator, step, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen, admin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO meetings (id, title, description, creator, step, kind, tz, start_min, end_min, days, slots, last_date, created_at, last_seen, admin_token, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, description, creator, STEP, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now, admin)
+      .bind(id, title, description, creator, STEP, kind, tz, startMin, endMin, JSON.stringify(days), JSON.stringify(slots), lastDate, now, now, admin, cleanDuration(b.duration))
       .run();
     return json({ id, admin }, 201);
   }
@@ -336,6 +344,12 @@ export async function handleMeetings(request, env, parts) {
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
     const b = await readJson(request);
     // the calendar entry: the creator's to change, at any time
+    if (b && "duration" in b) {
+      if (m.admin_token && !isHost(request, m)) return fail("Only the person who created this meeting can change how long it is.", 403);
+      const duration = cleanDuration(b.duration);
+      await env.DB.prepare("UPDATE meetings SET duration = ? WHERE id = ?").bind(duration, mid).run();
+      if (!("final" in b) && !("perms" in b) && !("cal" in b)) return json({ duration });
+    }
     if (b && "cal" in b) {
       if (m.admin_token && !isHost(request, m)) return fail("Only the person who created this meeting can change the calendar entry.", 403);
       const cal = cleanCal(b.cal);

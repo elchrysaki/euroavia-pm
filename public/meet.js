@@ -153,6 +153,7 @@ export function renderMeetCreate() {
           <div class="row"><label for="mStart">No earlier than</label><select id="mStart" class="time-select">${hourOpts(0, 23.5, 540)}</select></div>
           <div class="row"><label for="mEnd">No later than</label><select id="mEnd" class="time-select">${hourOpts(0.5, 24, 1020)}</select></div>
           <div class="row"><label for="mTz">Time zone</label><select id="mTz" class="time-select">${tzs.map((z) => `<option ${z === here ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></div>
+          <div class="row"><label for="mDur">About how long</label><select id="mDur" class="time-select">${MEET_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === 60 ? "selected" : ""}>${l}</option>`).join("")}</select></div>
         </div>
         <p class="fineprint">${icon("clock")}<span>These hours are in the time zone above. Everyone who opens the link sees the times converted to their own time zone, and can switch to another one.</span></p>
         <p class="range-summary" id="mcSummary"></p>
@@ -265,6 +266,7 @@ export function renderMeetCreate() {
       start_min: Number($("#mStart").value),
       end_min: Number($("#mEnd").value),
       tz: $("#mTz").value,
+      duration: Number($("#mDur").value),
     };
     $("#mcCreate").disabled = true;
     try {
@@ -471,6 +473,8 @@ function refreshOnReturn() {
 }
 
 const step = () => M.meeting.step || 15;
+/** About how long a meeting is: the best-times search looks for slots this long. */
+const MEET_LENGTHS = [[0, "Not set"], [30, "30 min"], [60, "1 h"], [90, "1 h 30 min"], [120, "2 h"], [180, "3 h"], [240, "4 h"], [360, "6 h"], [480, "8 h"]];
 /** What everyone may do (the creator always can): save the time, remove entries. */
 const perms = () => M.meeting.perms || { final: true, remove: true };
 const canSave = () => M.host || perms().final;
@@ -636,6 +640,9 @@ function paintBody() {
           M.host
             ? `<details class="card fold host-card"${M.hostOpen ? " open" : ""}>
           <summary><span>Host settings</span><small>Only you see this</small></summary>
+          <div class="host-sub">The meeting</div>
+          <label class="host-len"><span><b>About how long?</b><small>Best times look for slots this long</small></span>
+            <select data-meet-dur>${MEET_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (M.meeting.duration || 0) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
           <div class="host-row"><span><b>Calendar entry</b><small>Label, place and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
           <div class="host-sub">Everyone can…</div>
           <label class="toggle-row"><span><b>Save the time</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms().final ? "checked" : ""} /></label>
@@ -660,6 +667,18 @@ function paintBody() {
   body.querySelector(".mtg-people")?.addEventListener("toggle", (e) => (M.peopleOpen = e.target.open));
   body.querySelector(".host-card")?.addEventListener("toggle", (e) => (M.hostOpen = e.target.open));
   body.querySelector("[data-cal-edit-host]")?.addEventListener("click", openCalEditor);
+  body.querySelector("[data-meet-dur]")?.addEventListener("change", async (e) => {
+    const duration = Number(e.target.value);
+    try {
+      await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { duration } });
+      M.meeting.duration = duration;
+      M.moreBest = false;
+      K.toast(duration ? `Now looking for the best ${e.target.selectedOptions[0].textContent}` : "Looking for the best stretches again");
+      paintGridOnly();
+    } catch (err) {
+      K.toast(err.message, { error: true });
+    }
+  });
   body.querySelectorAll("[data-perm]").forEach((box) =>
     box.addEventListener("change", async () => {
       const next = { ...perms(), [box.dataset.perm]: box.checked };
@@ -1277,49 +1296,127 @@ async function setFinal(final) {
   }
 }
 
-/** "Best time so far": the longest stretch where the most people are free (maybe counts half). */
+/**
+ * Best times, like the trip's best dates: with a meeting length set, the best windows of exactly that
+ * length; otherwise the longest stretches where the most people are free. Up to 6 options that don't
+ * overlap, best first. Each option: { col, start, end (viewer minutes), slots[], yes, maybe, utc: {start,end} }.
+ */
+function bestTimes(L, limit = 6) {
+  const n = M.people.length;
+  if (!n) return [];
+  const dur = M.meeting.duration || 0;
+  const rowsPer = dur ? Math.max(1, Math.round(dur / ROW)) : 0;
+  const count = (cells) => {
+    const keys = cells.flatMap(keysOf);
+    let yes = 0;
+    let maybe = 0;
+    for (const p of M.people) {
+      const st = setsOf(p);
+      if (keys.every((k) => st.yes.has(k))) yes += 1;
+      else if (keys.every((k) => st.yes.has(k) || st.maybe.has(k))) maybe += 1;
+    }
+    return { yes, maybe, score: yes + maybe * 0.5 };
+  };
+  const opts = [];
+  for (const c of L.columns) {
+    if (rowsPer) {
+      for (let i = 0; i + rowsPer <= L.rows.length; i++) {
+        const mins = L.rows.slice(i, i + rowsPer);
+        if (mins.some((m, j) => j && m !== mins[j - 1] + ROW)) continue; // a gap in the day
+        const cells = mins.map((m) => c.cells.get(m));
+        if (cells.some((x) => !x)) continue;
+        const k = count(cells);
+        if (k.score) opts.push({ col: c, start: mins[0], end: mins[mins.length - 1] + ROW, slots: cells, ...k });
+      }
+    } else {
+      let run = null;
+      const flush = () => run && opts.push(run);
+      for (const m of L.rows) {
+        const cell = c.cells.get(m);
+        const k = cell ? count([cell]) : { score: 0 };
+        if (k.score && run && run.score === k.score && run.yes === k.yes && run.end === m) {
+          run.end = m + ROW;
+          run.slots.push(cell);
+        } else {
+          flush();
+          run = k.score ? { col: c, start: m, end: m + ROW, slots: [cell], ...k } : null;
+        }
+      }
+      flush();
+    }
+  }
+  opts.sort((a, b) => b.score - a.score || b.yes - a.yes || b.end - b.start - (a.end - a.start) || a.col.key.localeCompare(b.col.key) || a.start - b.start);
+  const picked = [];
+  for (const o of opts) {
+    if (picked.some((p) => p.col === o.col && !(o.end <= p.start || o.start >= p.end))) continue;
+    const s0 = Number(keysOf(o.slots[0])[0].slice(1));
+    o.utc = { start: s0, end: s0 + (o.end - o.start) };
+    picked.push(o);
+    if (picked.length >= limit) break;
+  }
+  return picked;
+}
+
+/** "Best time so far" + more options, like the trip's best dates. */
 function paintBest(L) {
   const { $, esc, icon } = K;
   const el = $("#mtgBest");
   if (!el) return;
   const n = M.people.length;
   if (!n || M.editing || M.picking) return void (el.innerHTML = "");
-  const len = ROW;
-  let best = null;
-  const better = (a) => !best || a.k > best.k || (a.k === best.k && a.end - a.start > best.end - best.start);
-  for (const c of L.columns) {
-    let run = null;
-    for (const minute of L.rows) {
-      const slot = c.cells.get(minute);
-      const k = slot ? score(slot) : 0;
-      if (k && run && run.k === k && run.end === minute) run.end = minute + len;
-      else {
-        if (run && better(run)) best = run;
-        run = k ? { k, start: minute, end: minute + len, col: c, slot } : null;
-      }
-    }
-    if (run && better(run)) best = run;
+  const best = bestTimes(L);
+  const dur = M.meeting.duration || 0;
+  const durTxt = dur ? (dur % 60 ? `${dur >= 60 ? `${Math.floor(dur / 60)} h ` : ""}${dur % 60} min` : `${dur / 60} h`) : "";
+  const label = dur ? `Best ${durTxt} so far` : "Best time so far";
+  if (!best.length) {
+    el.innerHTML = dur
+      ? `<div class="card best-time none"><span class="best-ico">${icon("clock")}</span><div><span class="best-label">${esc(label)}</span><span class="best-sub">Nobody is free for ${esc(durTxt)} in a row yet.</span></div></div>`
+      : "";
+    return;
   }
-  if (!best) return void (el.innerHTML = "");
-  let yes = 0;
-  for (const p of M.people) if (stateIn(setsOf(p), best.slot) === "yes") yes += 1;
+  const top = best[0];
+  const when = (o) => `${o.col.long}, ${timeLabel(o.start)}–${timeLabel(o.end)}`;
+  const counts = (o) => `${o.yes} of ${n} available${o.maybe ? ` · ${o.maybe} maybe` : ""}`;
   if (M.meeting.final && !M.showBest) {
-    el.innerHTML = `<button type="button" class="best-note" id="showBestT">${icon("clock")}<span>Best time so far: <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b></span><span class="best-note-go" aria-hidden="true">›</span></button>`;
+    el.innerHTML = `<button type="button" class="best-note" id="showBestT">${icon("clock")}<span>${esc(label)}: <b>${esc(when(top))}</b></span><span class="best-note-go" aria-hidden="true">›</span></button>`;
     el.querySelector("#showBestT").addEventListener("click", () => {
       M.showBest = true;
       paintGridOnly();
     });
     return;
   }
-  el.innerHTML = `<div class="card best-time">
+  const more = best.slice(1);
+  el.innerHTML = `<div class="card best-time${M.moreBest ? " open" : ""}">
     <span class="best-ico">${icon("clock")}</span>
-    <div><span class="best-label">Best time so far</span>
-    <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b>
-    <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} maybe` : ""}</span></div>
-    ${M.meeting.kind === "dates" && canSave() ? '<button type="button" class="btn btn-tinted best-final" id="bestFinal">Save this time</button>' : ""}
+    <div class="best-body"><span class="best-label">${esc(label)}</span>
+    <b>${esc(when(top))}</b>
+    <span class="best-sub">${counts(top)}</span>
+    <div class="best-actions">
+      <button type="button" class="btn btn-tinted" data-best-who="0">Who’s free?</button>
+      ${M.meeting.kind === "dates" && canSave() ? '<button type="button" class="btn btn-tinted" data-best-save="0">Save this time</button>' : ""}
+      ${more.length ? `<button type="button" class="btn btn-plain" id="moreTimes">${M.moreBest ? "Fewer options" : `More options (${more.length})`}</button>` : ""}
+    </div>
+    ${
+      more.length && M.moreBest
+        ? `<ol class="best-list">${more
+            .map(
+              (o, i) => `<li><div class="best-row">
+                <span class="best-rank">${i + 2}</span>
+                <span class="best-main"><b>${esc(when(o))}</b><span>${counts(o)}</span></span>
+                <span class="best-row-actions"><button type="button" class="btn btn-tinted" data-best-who="${i + 1}">Who</button>${
+                  M.meeting.kind === "dates" && canSave() ? `<button type="button" class="btn btn-tinted" data-best-save="${i + 1}">Save</button>` : ""
+                }</span>
+              </div></li>`,
+            )
+            .join("")}</ol>`
+        : ""
+    }
+    </div>
   </div>`;
-  el.querySelector("#bestFinal")?.addEventListener("click", () => {
-    const start = Number(keysOf(best.slot)[0].slice(1));
-    setFinal({ start, end: start + (best.end - best.start) });
+  el.querySelector("#moreTimes")?.addEventListener("click", () => {
+    M.moreBest = !M.moreBest;
+    paintBest(L);
   });
+  el.querySelectorAll("[data-best-who]").forEach((b) => b.addEventListener("click", () => openPickWho([best[+b.dataset.bestWho].utc])));
+  el.querySelectorAll("[data-best-save]").forEach((b) => b.addEventListener("click", () => setFinal({ ranges: [best[+b.dataset.bestSave].utc] })));
 }

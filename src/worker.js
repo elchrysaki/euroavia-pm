@@ -177,7 +177,37 @@ function parsePerms(v) {
   } catch {
     o = {};
   }
-  return { final: o.final !== false, remove: o.remove !== false };
+  return { final: o.final !== false, remove: o.remove !== false, places: o.places !== false, activities: o.activities !== false };
+}
+/**
+ * The host's rules for new places / activities: when "everyone can suggest places" is off, other people
+ * can only vote for places already on the list; when "everyone can add activities" is off, they can't add
+ * new ones (they can still like). Their own earlier suggestions stay.
+ */
+async function applyRules(env, request, event, data, ownId = null) {
+  if (isHost(request, event) || (event.perms.places && event.perms.activities)) return data;
+  const { results } = await env.DB.prepare("SELECT id, data FROM responses WHERE event_id = ?").bind(event.id).all();
+  const listed = new Set();
+  let mineBefore = { destinations: [], activities: [] };
+  for (const r of results) {
+    let d = {};
+    try {
+      d = JSON.parse(r.data);
+    } catch {
+      d = {};
+    }
+    if (r.id === ownId) mineBefore = { destinations: d.destinations || [], activities: d.activities || [] };
+    else for (const x of d.destinations || []) listed.add(String(x).toLowerCase());
+  }
+  for (const x of mineBefore.destinations) listed.add(String(x).toLowerCase());
+  for (const x of event.cal?.places || []) listed.add(String(x).toLowerCase());
+  const out = { ...data };
+  if (!event.perms.places) out.destinations = (data.destinations || []).filter((x) => listed.has(String(x).toLowerCase()));
+  if (!event.perms.activities) {
+    const before = new Set(mineBefore.activities.map((a) => a.id));
+    out.activities = (data.activities || []).filter((a) => before.has(a.id));
+  }
+  return out;
 }
 /**
  * What the calendar entry says (the host can change it any time; empty = the event's own title and
@@ -399,6 +429,7 @@ async function handleApi(request, env, url) {
     if (!body) return fail("That didn’t come through. Please try again.");
     const clean = sanitizeResponse(body, event);
     if (clean.error) return fail(clean.error);
+    clean.data = await applyRules(env, request, event, clean.data);
 
     const id = randomId(10);
     const token = randomId(24);
@@ -424,6 +455,7 @@ async function handleApi(request, env, url) {
 
     const clean = sanitizeResponse(body, event);
     if (clean.error) return fail(clean.error);
+    clean.data = await applyRules(env, request, event, clean.data, parts[3]);
     await env.DB.prepare("UPDATE responses SET name = ?, data = ?, updated_at = ? WHERE id = ?")
       .bind(clean.name, JSON.stringify(clean.data), Date.now(), parts[3])
       .run();

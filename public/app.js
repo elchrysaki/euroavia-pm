@@ -1712,6 +1712,8 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   current.hasHost = data.hasHost !== false;
   const perms = event.perms || { final: true, remove: true };
   const canRemove = host || perms.remove;
+  current.canAddPlaces = host || perms.places !== false;
+  current.canAddActs = host || perms.activities !== false;
   current.canSave = host || perms.final;
   const ctaHtml = myResponse
     ? `<button class="btn btn-secondary btn-block" data-act="edit">${icon("pencil")} Edit my response</button>`
@@ -1761,15 +1763,19 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
           host
             ? `<details class="card fold host-card"${current.hostOpen ? " open" : ""}>
           <summary><span>Host settings</span><small>Only you see this</small></summary>
-          <p>Choose how long the trip is, what people are asked about, and what everyone may do.</p>
+          <p>Only you see this. Change any of it at any time.</p>
+          <div class="host-sub">The trip</div>
           <label class="host-len"><span><b>How long is the trip?</b><small>The best-dates search looks for this many days in a row</small></span>
             <select data-trip-days>${TRIP_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (event.trip_days || 1) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <div class="host-row"><span><b>Calendar entry</b><small>Label, places, activities and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
+          <div class="host-sub">Sections</div>
           <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
-          <div class="host-row"><span><b>Calendar entry</b><small>Label, place, activities and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
           <div class="host-sub">Everyone can…</div>
           <label class="toggle-row"><span><b>Save the date</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms.final ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms.remove ? "checked" : ""} /></label>
+          ${sec.places ? `<label class="toggle-row"><span><b>Suggest new places</b><small>Off: people vote on the places already listed</small></span><input type="checkbox" role="switch" data-perm="places" ${perms.places !== false ? "checked" : ""} /></label>` : ""}
+          ${sec.activities ? `<label class="toggle-row"><span><b>Add activities</b><small>Off: only you add them; others can like</small></span><input type="checkbox" role="switch" data-perm="activities" ${perms.activities !== false ? "checked" : ""} /></label>` : ""}
         </details>`
             : ""
         }
@@ -2429,7 +2435,9 @@ function destinationsHtml() {
   const { destinations, n } = current.agg;
   const me = myCurrentResponse();
   const myPlaces = new Set((me?.r.destinations || []).map((d) => d.toLowerCase()));
-  const addForm = `<form class="add-row quick-add" data-form="place"><input name="place" maxlength="60" placeholder="Suggest a place…" enterkeyhint="send" aria-label="Suggest a place" /><button class="btn btn-secondary" type="submit">${icon("plus")} Add</button></form>`;
+  const addForm = current.canAddPlaces === false
+    ? `<p class="form-hint locked">${icon("lock")} The host chose the places. Vote for the ones you like.</p>`
+    : `<form class="add-row quick-add" data-form="place"><input name="place" maxlength="60" placeholder="Suggest a place…" enterkeyhint="send" aria-label="Suggest a place" /><button class="btn btn-secondary" type="submit">${icon("plus")} Add</button></form>`;
   if (!destinations.length)
     return `${addForm}<div class="card empty"><div class="glyph">${icon("pin")}</div><h3>No places yet</h3><p>Suggest the first one above.</p></div>`;
   const top = destinations[0].voters.length;
@@ -2512,7 +2520,9 @@ function groupActivities(activities, destinationOrder) {
 function activitiesHtml() {
   const { activities, destinations } = current.agg;
   const me = myCurrentResponse();
-  const form = `<form class="card pad quick-act" data-form="activity">
+  const form = current.canAddActs === false
+    ? `<p class="form-hint locked">${icon("lock")} The host adds the activities. Like the ones you’d enjoy.</p>`
+    : `<form class="card pad quick-act" data-form="activity">
       <div class="form-grid">
         <input class="field full" name="title" maxlength="100" placeholder="Add an activity — e.g. Sunset kayak tour" aria-label="Activity" />
         <input class="field" name="link" maxlength="500" inputmode="url" placeholder="Paste a link (optional)" aria-label="Link" />
@@ -2898,7 +2908,11 @@ function openFlow({ edit = null } = {}) {
         <div class="eyebrow">${stepLabel("destinations")}</div>
         <h2 class="flow-title">${animatedTitle("Where should we *go?*")}</h2>
         <p class="flow-lead">${others.destinations.length ? "Here’s what the group has suggested so far. Tap the ones you’d love — or add your own." : "You’re the first to suggest a place. Add as many as you like."}</p>
-        <div class="add-row"><input id="destInput" maxlength="60" placeholder="City, country, place…" enterkeyhint="done" /><button class="btn btn-secondary" id="destAdd" type="button">${icon("plus")} Add</button></div>
+        ${
+          current.canAddPlaces === false
+            ? `<p class="form-hint locked">${icon("lock")} The host chose the places. Tap the ones you’d love.</p><input id="destInput" hidden /><button id="destAdd" hidden type="button"></button>`
+            : `<div class="add-row"><input id="destInput" maxlength="60" placeholder="City, country, place…" enterkeyhint="done" /><button class="btn btn-secondary" id="destAdd" type="button">${icon("plus")} Add</button></div>`
+        }
         ${names.length ? `<div class="preview-label">${icon("trophy").replace("<svg", '<svg width="16" height="16"')} Suggested places</div>` : ""}
         <div class="chips" id="destChips">${names
           .map((n, i) => {
@@ -2917,7 +2931,8 @@ function openFlow({ edit = null } = {}) {
         <div class="eyebrow">${stepLabel("activities")}</div>
         <h2 class="flow-title">${animatedTitle("What should we *do* there?")}</h2>
         <p class="flow-lead">Suggest activities and paste links — a hike, a museum, a restaurant, a festival.</p>
-        <div class="card pad">
+        ${current.canAddActs === false ? `<p class="form-hint locked">${icon("lock")} The host adds the activities. Like the ones you’d enjoy.</p>` : ""}
+        <div class="card pad"${current.canAddActs === false ? " hidden" : ""}>
           <div class="form-grid">
             <input class="field full" id="actTitle" maxlength="100" placeholder="Activity — e.g. Sunset kayak tour" />
             <input class="field" id="actLink" maxlength="500" inputmode="url" placeholder="Paste a link (optional)" />
