@@ -2325,3 +2325,30 @@ html[data-perf] .card.people-fold, html[data-perf] details.people-fold { backgro
 .pick-bar .btn { white-space: nowrap; }
 .final-when.many { flex-direction: column; font-size: clamp(1.125rem, 3vw, 1.5rem); gap: 0.25rem; }
 .final-when.many small { display: block; font-size: 0.9375rem; font-weight: 500; letter-spacing: 0; color: var(--label-2); margin: 0.125rem 0 0.375rem; }
+
+/* ---- "It's a date": beside the title on wide screens, compact ---- */
+.date-head { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; margin-bottom: 1.25rem; }
+.date-head .mtg-head { margin-bottom: 0; }
+.date-slot:empty { display: none; }
+@media (min-width: 900px) {
+  .date-head { grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem); gap: 2rem; }
+  .date-slot { margin-top: 1.5rem; }
+}
+.date-slot .final-card, .date-side .final-card, .date-top .final-card { margin: 0; padding: 1.125rem 1.25rem; }
+.date-slot .final-when, .date-side .final-when, .date-top .final-when { font-size: clamp(1.25rem, 2.6vw, 1.625rem); }
+.date-slot .final-when.many, .date-side .final-when.many { font-size: 1.125rem; }
+.date-slot .final-actions, .date-side .final-actions { margin-top: 0.75rem; }
+.date-slot .final-actions .btn, .date-side .final-actions .btn { min-height: 2.5rem; padding: 0 0.875rem; font-size: 0.9375rem; }
+/* trips: top of the page on phones and tablets; above the calendar (right column) on wide screens */
+.date-top:empty, .date-side:empty { display: none; }
+.date-top { margin-top: 1rem; }
+.date-side { margin-bottom: 1.25rem; }
+@media (min-width: 1024px) { .date-top { display: none; } }
+@media (max-width: 1023px) { .date-side { display: none; } }
+.app > .final-card { margin-top: 1.25rem; }
+
+/* ---- Change log: the same open look as Who responded ---- */
+.event-aside .changelog, .mtg-side .changelog { background: none !important; padding: 0; }
+html[data-perf] .changelog.people-fold { background: none !important; }
+.changelog.people-fold ul { margin: 0.25rem 0.25rem 0; }
+.changelog.people-fold li { font-size: 0.9375rem; }

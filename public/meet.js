@@ -535,6 +535,7 @@ function paint() {
   const pin = /^\d{6}$/.test(meeting.id) ? K.pinText(meeting.id) : "";
   app.innerHTML = `
     <div class="mtg">
+      <div class="date-head">
       <header class="mtg-head">
         <p class="eyebrow">Meeting times${pin ? ` · PIN ${esc(pin)}` : ""}</p>
         <h1 class="display">${esc(meeting.title)}</h1>
@@ -547,6 +548,8 @@ function paint() {
         }
         ${days <= 7 ? `<p class="expiry-note">${icon("lock")}<span>This meeting will be deleted on <b>${esc(new Date(meeting.delete_at).toLocaleDateString(undefined, { month: "long", day: "numeric" }))}</b>.</span></p>` : ""}
       </header>
+      <div class="date-slot" id="mtgFinalSlot"></div>
+      </div>
       <div id="mtgBody"></div>
     </div>`;
   K.$("#viewTz")?.addEventListener("change", (e) => {
@@ -574,8 +577,10 @@ function paintBody() {
   const n = M.people.length;
   const meName = M.me?.name;
   const editing = M.editing;
+  // the saved time sits beside the title, in the space on the right
+  const slot = $("#mtgFinalSlot");
+  if (slot) slot.innerHTML = finalHtml();
   body.innerHTML = `
-    ${finalHtml()}
     <div id="mtgBest"></div>
     <div class="mtg-main">
       <section class="card mtg-grid-card">
@@ -1162,7 +1167,7 @@ function finalHtml() {
     else if (keys.length && keys.every((k) => st.yes.has(k) || st.maybe.has(k))) maybe += 1;
   }
   return `<div class="card final-card" id="mtgFinal">
-    <div class="final-label">${icon("check")} It’s decided</div>
+    <div class="final-label">${icon("check")} It’s a date</div>
     <div class="final-when${ranges.length > 1 ? " many" : ""}">${ranges
       .map((r) => {
         const c = rangeCount(r);

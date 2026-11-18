@@ -1717,7 +1717,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     ? `<button class="btn btn-secondary btn-block" data-act="edit">${icon("pencil")} Edit my response</button>`
     : `<button class="btn btn-primary btn-block" data-act="add">${icon("plus")} Add your availability</button>`;
   app.innerHTML = `
-    ${finalTripHtml(event, host)}
+    <div class="date-top">${finalTripHtml(event, host)}</div>
     <div class="event-layout">
       <aside class="event-aside">
         <div class="event-head pass-card fade-in">
@@ -1775,6 +1775,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
         }
       </aside>
       <section class="event-main">
+        <div class="date-side">${finalTripHtml(event, host)}</div>
         ${
           tabs.length > 1
             ? `<div class="segmented tabs fade-in d2" role="tablist" data-seg="tabs">
@@ -2244,7 +2245,7 @@ function changeLogHtml(log, fmtWhat = (e) => (e.dates?.length ? dateRuns(e.dates
     return who;
   };
   const items = log.slice(0, 20);
-  return `<details class="card changelog"${items.length <= 3 ? " open" : ""}>
+  return `<details class="card fold people-fold changelog"${items.length <= 3 ? " open" : ""}>
     <summary><span>Change log</span><small>${log.length} ${log.length === 1 ? "change" : "changes"}</small></summary>
     <ul>${items.map((e) => `<li><span>${line(e)}</span><time datetime="${new Date(e.at).toISOString()}">${esc(ago(e.at))}</time></li>`).join("")}</ul>
   </details>`;
@@ -2275,8 +2276,8 @@ function finalTripHtml(event, host) {
     if (f.dates.every((d) => ys.has(d))) all += 1;
     else if (f.dates.every((d) => ys.has(d) || ms.has(d))) some += 1;
   }
-  return `<div class="card final-card" id="finalCard">
-    <div class="final-label">${icon("check")} It’s decided</div>
+  return `<div class="card final-card trip-final">
+    <div class="final-label">${icon("check")} It’s a date</div>
     <div class="final-when">${runs.map((r) => `<span>${esc(fmtRunLong(r))}</span>`).join("")}</div>
     <div class="final-sub">${n} ${n === 1 ? "day" : "days"} · ${all} definitely${some ? ` · ${some} maybe` : ""}</div>
     ${calSummaryHtml(event)}
@@ -2383,8 +2384,9 @@ function openCalEditor(event) {
   });
 }
 function bindFinalTrip(event) {
-  const card = $("#finalCard");
-  if (!card) return;
+  $$(".trip-final").forEach((card) => bindTripCard(card, event));
+}
+function bindTripCard(card, event) {
   card.querySelector("[data-final-ics]").addEventListener("click", () => openAddToCalendar(tripCalEntry(event)));
   card.querySelector("[data-cal-edit]")?.addEventListener("click", () => openCalEditor(event));
   card.querySelector("[data-final-clear]")?.addEventListener("click", async () => {
