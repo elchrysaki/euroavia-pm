@@ -28,11 +28,15 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
 
 People can edit their own response later from the same device. The device keeps a private token for this. There are no accounts.
 
-**Trip length.** When creating a trip (and later in Host settings) the host picks how long the trip is: 1 day, 2, 3, 4 or 5 days, a week, 10 days or 2 weeks. The best-dates search then looks for the best **stretch of that many days in a row** (who can make every day of it: definitely, or definitely-or-maybe), not the best single day, and offers up to 6 non-overlapping options. Tapping a day opens the stretch that starts there (with "Just this day"). **Compare** then picks whole stretches: tap the first day of each, then **Compare** shows them side by side, best first.
+**Trip length.** When creating a trip (and later in Host settings) the host picks how long the trip is: 1 day, 2, 3, 4 or 5 days, a week, 10 days or 2 weeks. The best-dates search then looks for the best **stretch of that many days in a row** (who can make every day of it: definitely, or definitely-or-maybe), not the best single day, and offers up to 6 non-overlapping options. Tapping a day shows that day's people, like always; a switch at the top changes it to the stretch that starts there, and **Save** saves whichever one you're looking at (one day, or e.g. a whole weekend). **Compare** then picks whole stretches: tap the first day of each, then **Compare** shows them side by side, best first.
 
 **It's decided.** Anyone can save the date: tap a day or stretch and **Save these dates**, or pick days in Compare and **Save dates**. Meetings: **Save this time** on the best time, or on any time you tap. Everyone who opens it (by link or PIN) then sees an **It's decided** card at the top until the event is deleted, with one **Add to calendar** button that offers **Google Calendar**, **Apple Calendar** (an .ics file, which iPhone, iPad and Mac open in Calendar), **Microsoft Outlook** (Outlook.com), **Outlook for work or school** (Microsoft 365) and **Download a calendar file**. Trips go in as all-day dates; meetings as a timed event in UTC, so every calendar shows it in its own time zone. Anyone can **Unsave** it.
 
 **Change log.** Anyone can remove someone's entry (the × next to a name). Removing an entry, saving and unsaving the date are written to a small **Change log** on the page ("Marco removed Cara's entry", "Helena saved Fri, Dec 11 – Sun, Dec 13"), with the name this device uses (asked once if it doesn't know it). The latest 40 changes are kept.
+
+**Long lists stay out of the way.** On the trip page, **Add your availability** sits right under the title; **Who responded** folds to a row of faces and a count (open by default up to 6 people), and **Host settings** and the change log fold too. On wide screens the left column scrolls on its own, so neither side pushes the other. Meetings: the **Responses** list folds the same way.
+
+**What everyone may do.** In **Host settings** (trips and meetings) the host chooses whether **everyone can save the date / time** and whether **everyone can remove entries**. Both are on by default; when off, only the host can, and the server refuses everyone else.
 
 **The host** is whoever created the event, from that browser (it keeps a private admin key; the server checks it). Only the host can change the trip length and turn **Places** and **Activities** on or off (also when creating). Events created before hosts existed have no host settings.
 
@@ -172,7 +176,7 @@ The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman
 | `GET` | `/api/meetings/:id` | → `{ meeting, people[] }` |
 | `POST` | `/api/meetings/:id/signin` | `{ name }` → `{ id, token, name, slots[], maybe[] }` |
 | `PUT` | `/api/meetings/:id/people/:pid` | `{ token, slots[], maybe[] }` |
-| `PATCH` | `/api/events/:id` | `{ sections?, trip_days? }` (host) · `{ final: { dates[] } \| null, by }` (anyone, logged) |
+| `PATCH` | `/api/events/:id` | `{ sections?, trip_days?, perms? }` (host) · `{ final: { dates[] } \| null, by }` (anyone, logged) |
 | `DELETE` | `/api/events/:id/responses/:rid?by=Name` | anyone, logged |
 | `PATCH` | `/api/meetings/:id` | `{ final: { start, end } \| null, by }` (UTC epoch minutes; anyone, logged) |
 | `DELETE` | `/api/meetings/:id/people/:pid?by=Name` | anyone, logged |

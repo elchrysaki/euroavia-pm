@@ -1678,7 +1678,8 @@ async function renderEvent(id, { keepTab = false, quiet = false } = {}) {
 function paintEvent(data, prevTab, { quiet = false } = {}) {
   const keepFilter = current?.event?.id === data.event.id ? current.filter : null;
   const keepMore = current?.event?.id === data.event.id ? current.moreBest : false; // the expanded "more dates" stays open
-  current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set(), filter: keepFilter, moreBest: keepMore };
+  const keepFolds = current?.event?.id === data.event.id ? { peopleOpen: current.peopleOpen, hostOpen: current.hostOpen } : {};
+  current = { ...data, agg: aggregate(data.responses), tab: prevTab, selectMode: false, selected: new Set(), filter: keepFilter, moreBest: keepMore, ...keepFolds };
   app.classList.toggle("quiet", quiet); // in-place update (a vote, a like): no entrance animations
   const { event, responses } = data;
   document.title = `${event.title} — Wingman`;
@@ -1706,6 +1707,9 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   if (!tabs.some(([v]) => v === prevTab)) prevTab = current.tab = "calendar";
   const host = !!data.host;
   current.host = host;
+  const perms = event.perms || { final: true, remove: true };
+  const canRemove = host || perms.remove;
+  current.canSave = host || perms.final;
   const ctaHtml = myResponse
     ? `<button class="btn btn-secondary btn-block" data-act="edit">${icon("pencil")} Edit my response</button>`
     : `<button class="btn btn-primary btn-block" data-act="add">${icon("plus")} Add your availability</button>`;
@@ -1727,33 +1731,42 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
             ${sec.places ? `<span class="pill">${icon("pin")} ${current.agg.destinations.length} ${current.agg.destinations.length === 1 ? "place" : "places"}</span>` : ""}
             ${host ? `<span class="pill host-pill">${icon("lock")} You’re the host</span>` : ""}
           </div>
-          ${
-            responses.length
-              ? `<div class="people-list"><div class="people-label">Who responded · tap a name to see their days</div><div class="people-chips">${responses
-                  .map(
-                    (r) =>
-                      `<div class="person-row"><button type="button" class="person" data-filter="${esc(r.id)}" aria-pressed="false">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></button>${
-                        `<button type="button" class="person-remove" data-remove-resp="${esc(r.id)}" aria-label="Remove ${esc(r.name)}’s entry">${icon("x")}</button>`
-                      }</div>`,
-                  )
-                  .join("")}</div></div>`
-              : ""
-          }
           ${expiryNotice(event)}
         </div>
         <div class="event-cta fade-in d1">${ctaHtml}</div>
+        ${
+          responses.length
+            ? `<details class="card fold people-fold"${current.peopleOpen ?? responses.length <= 6 ? " open" : ""}>
+          <summary><span>Who responded</span><span class="fold-faces" aria-hidden="true">${responses
+            .slice(0, 3)
+            .map((r) => avatar(r.name, "sm"))
+            .join("")}</span><small>${responses.length}</small></summary>
+          <p class="fold-note">Tap a name to see their days.</p>
+          <div class="people-chips">${responses
+            .map(
+              (r) =>
+                `<div class="person-row"><button type="button" class="person" data-filter="${esc(r.id)}" aria-pressed="false">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></button>${
+                  canRemove ? `<button type="button" class="person-remove" data-remove-resp="${esc(r.id)}" aria-label="Remove ${esc(r.name)}’s entry">${icon("x")}</button>` : ""
+                }</div>`,
+            )
+            .join("")}</div>
+        </details>`
+            : ""
+        }
         ${changeLogHtml(event.log || [])}
         ${
           host
-            ? `<div class="card host-card">
-          <h3>Host settings</h3>
-          <p>Only you see this. Choose how long the trip is and what people are asked about.</p>
+            ? `<details class="card fold host-card"${current.hostOpen ? " open" : ""}>
+          <summary><span>Host settings</span><small>Only you see this</small></summary>
+          <p>Choose how long the trip is, what people are asked about, and what everyone may do.</p>
           <label class="host-len"><span><b>How long is the trip?</b><small>The best-dates search looks for this many days in a row</small></span>
             <select data-trip-days>${TRIP_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (event.trip_days || 1) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
           <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
-
-        </div>`
+          <div class="host-sub">Everyone can…</div>
+          <label class="toggle-row"><span><b>Save the date</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms.final ? "checked" : ""} /></label>
+          <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms.remove ? "checked" : ""} /></label>
+        </details>`
             : ""
         }
       </aside>
@@ -1770,7 +1783,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
       </section>
     </div>
     <div class="action-bar" id="actionBar">${ctaHtml}</div>
-    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button><button class="btn btn-tinted" id="selFinal">Save dates</button><button class="btn btn-primary" id="selShow">Who’s free?</button></div>
+    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button>${current.canSave ? '<button class="btn btn-tinted" id="selFinal">Save dates</button>' : ""}<button class="btn btn-primary" id="selShow">Who’s free?</button></div>
   `;
 
   $$('[data-act="add"]').forEach((b) => b.addEventListener("click", () => openFlow()));
@@ -1794,6 +1807,22 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
         toast(`${r.name}’s entry was removed`);
         await renderEvent(event.id, { keepTab: true, quiet: true });
       } catch (err) {
+        toast(err.message, { error: true });
+      }
+    }),
+  );
+  $(".people-fold")?.addEventListener("toggle", (e) => (current.peopleOpen = e.target.open));
+  $(".host-card")?.addEventListener("toggle", (e) => (current.hostOpen = e.target.open));
+  // host: what everyone may do
+  $$("[data-perm]").forEach((box) =>
+    box.addEventListener("change", async () => {
+      const next = { ...perms, [box.dataset.perm]: box.checked };
+      try {
+        await api(`/events/${event.id}`, { method: "PATCH", body: { perms: next } });
+        toast(box.checked ? "Everyone can do that now" : "Only you can do that now");
+        await renderEvent(event.id, { keepTab: true, quiet: true });
+      } catch (err) {
+        box.checked = !box.checked;
         toast(err.message, { error: true });
       }
     }),
@@ -1989,7 +2018,7 @@ function bindCalendar() {
       paintSelection();
       updateSelectBar();
     } else {
-      openDaySheet(windowFrom(date, L), { single: L > 1 ? date : null });
+      openDaySheet([date], { stretchFrom: L > 1 ? date : null });
     }
   });
 }
@@ -2105,7 +2134,10 @@ function updateSelectBar() {
   document.body.classList.toggle("selecting", current.selectMode);
 }
 
-function openDaySheet(dates, { single = null } = {}) {
+function openDaySheet(dates, { stretchFrom = null, showStretch = false } = {}) {
+  const L = tripLen();
+  // tapping a day shows that day's people; with a trip length you can switch to the stretch that starts there
+  if (stretchFrom && showStretch) dates = windowFrom(stretchFrom, L);
   const { responses } = current;
   const yes = [];
   const maybe = [];
@@ -2138,6 +2170,15 @@ function openDaySheet(dates, { single = null } = {}) {
 
   openSheet(`
     <div class="sheet-head"><div><h2>${esc(title)}</h2><div class="sheet-sub">${esc(sub)}</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    ${
+      stretchFrom
+        ? `<div class="segmented sheet-seg" role="group" aria-label="Show" data-seg="span">
+        <span class="thumb"></span>
+        <button type="button" data-value="day" aria-pressed="${!showStretch}">${esc(fmtDate(stretchFrom, { weekday: "short", day: "numeric", month: "short" }))}</button>
+        <button type="button" data-value="stretch" aria-pressed="${showStretch}">${L === 7 ? "The week" : `${L} days`} from here</button>
+      </div>`
+        : ""
+    }
     <div class="tally">
       <div class="t-yes"><b>${yes.length}</b><span>Definitely</span></div>
       <div class="t-maybe"><b>${maybe.length}</b><span>Maybe</span></div>
@@ -2150,21 +2191,25 @@ function openDaySheet(dates, { single = null } = {}) {
       ${responses.length ? "" : '<p class="sheet-sub">No responses yet.</p>'}
     </div>
     ${
-      `<div class="sheet-final"><button type="button" class="btn btn-primary btn-block" id="sheetFinal">${icon("check")} ${
-        dates.length === 1 ? "Save this date" : "Save these dates"
-      }</button>${
-        single ? `<button type="button" class="btn btn-plain btn-block" id="sheetSingle">Just ${esc(fmtDate(single, { weekday: "short", day: "numeric", month: "short" }))}</button>` : ""
-      }<p class="sheet-sub">Everyone who opens the event sees the saved dates and can add them to their calendar. Anyone can unsave them; it shows in the change log.</p></div>`
+      current.canSave
+        ? `<div class="sheet-final"><button type="button" class="btn btn-tinted btn-block" id="sheetFinal">${icon("check")} ${
+            dates.length === 1 ? "Save this date" : `Save ${contiguous ? `these ${dates.length} days` : "these dates"}`
+          }</button><p class="sheet-sub">Saving shows it to everyone, ready to add to their calendar. It goes in the change log.</p></div>`
+        : ""
     }
   `);
   $("#sheetFinal")?.addEventListener("click", () => {
     closeSheet();
     setFinalDates(dates);
   });
-  $("#sheetSingle")?.addEventListener("click", () => {
-    closeSheet();
-    setTimeout(() => openDaySheet([single]), 260);
-  });
+  const seg = $('[data-seg="span"]');
+  if (seg)
+    setupSegmented(seg, (v) => {
+      // swap the sheet's content in place
+      const wantStretch = v === "stretch";
+      closeSheet(true);
+      openDaySheet([stretchFrom], { stretchFrom, showStretch: wantStretch });
+    });
 }
 
 const TRIP_LENGTHS = [
@@ -2216,7 +2261,7 @@ function finalTripHtml(event, host) {
     <div class="final-sub">${n} ${n === 1 ? "day" : "days"} · ${all} definitely${some ? ` · ${some} maybe` : ""}</div>
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
-      <button type="button" class="btn btn-plain" data-final-clear>Unsave these dates</button>
+      ${current.canSave ? '<button type="button" class="btn btn-plain" data-final-clear>Unsave these dates</button>' : ""}
     </div>
   </div>`;
 }

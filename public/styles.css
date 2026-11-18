@@ -2206,3 +2206,41 @@ body:has(.flow) #app, body:has(.flow) .topbar, body:has(.flow) .action-bar { vis
 .cmp-actions .btn { min-height: 2.75rem; border-radius: 999px; flex: 1; font-size: 1rem; }
 .select-bar #selFinal[hidden] { display: none; }
 .verdict.none .verdict-sub { margin: 0.375rem 0 0; line-height: 1.45; }
+
+/* ---- Folding sections (Apple disclosure style): Who responded, Responses, Host settings ---- */
+.fold { padding: 0; margin-top: 1rem; }
+.fold > summary { display: flex; align-items: center; gap: 0.625rem; padding: 0.875rem 1.125rem; min-height: 3.25rem; cursor: pointer; list-style: none; font-size: 1.0625rem; font-weight: 700; border-radius: inherit; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary small { font-size: 0.9375rem; font-weight: 600; color: var(--label-2); }
+.fold > summary::after { content: ""; width: 0.5rem; height: 0.5rem; margin-left: auto; flex: none; border-right: 2px solid var(--label-3); border-bottom: 2px solid var(--label-3); transform: rotate(-45deg); transition: transform .2s var(--ease); }
+.fold[open] > summary::after { transform: rotate(45deg); }
+.fold > summary:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -3px; }
+@media (hover: hover) { .fold > summary:hover { background: var(--pill-hover); } }
+.fold[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.fold > :not(summary) { margin-left: 1.125rem; margin-right: 1.125rem; }
+.fold > :last-child { margin-bottom: 1rem; }
+.fold-faces { display: inline-flex; margin-left: 0.25rem; }
+.fold-faces .avatar { margin-left: -0.375rem; box-shadow: 0 0 0 2px var(--flat-card); }
+.fold-faces .avatar:first-child { margin-left: 0; }
+.fold[open] .fold-faces { display: none; }
+.fold-note { margin-top: 0; margin-bottom: 0.25rem; font-size: 0.9375rem; color: var(--label-2); }
+.people-fold .people-chips { max-height: 22rem; overflow-y: auto; overscroll-behavior: contain; }
+.mtg-people.fold .mtg-plist { max-height: 22rem; overflow-y: auto; overscroll-behavior: contain; }
+.host-card.fold { gap: 0; }
+.host-card.fold > p { margin-top: 0; margin-bottom: 0.875rem; font-size: 0.9375rem; color: var(--label-2); }
+.host-card.fold .toggle-row, .host-card.fold .host-len { padding: 0.625rem 0; border-top: 1px solid var(--flat-line); }
+.host-sub { margin-top: 0.875rem; padding-bottom: 0.25rem; font-size: 0.875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--label-2); }
+.event-cta { margin-top: 1rem; }
+.changelog { margin-top: 1rem; }
+
+/* ---- Both columns scroll on their own on wide screens ---- */
+@media (min-width: 1024px) {
+  .event-aside { top: 5.5rem !important; max-height: calc(100dvh - 6.5rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px 6px 1.5rem 2px; margin: -2px -6px 0 -2px; }
+  .mtg-side { max-height: calc(100dvh - 6.75rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px; margin: -2px; }
+}
+
+/* ---- Day sheet: this day or the stretch from here ---- */
+.sheet-seg { margin: 0 0 1rem; }
+.sheet-seg button { font-size: 0.9375rem !important; }
+.sheet-final .btn { min-height: 3rem; border-radius: 999px; }
+.fold-faces .avatar { width: 1.875rem; height: 1.875rem; font-size: 0.6875rem; margin-left: -0.5rem; }

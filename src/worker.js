@@ -169,6 +169,16 @@ function parseSections(v) {
   return { places: o.places !== false, activities: o.activities !== false };
 }
 const cleanSections = (v) => ({ places: v?.places !== false, activities: v?.activities !== false });
+/** What everyone (not only the host) may do: save / unsave the date, remove entries. Both on unless the host says no. */
+function parsePerms(v) {
+  let o = {};
+  try {
+    o = typeof v === "string" ? JSON.parse(v) : v || {};
+  } catch {
+    o = {};
+  }
+  return { final: o.final !== false, remove: o.remove !== false };
+}
 /** How long the trip is, in days (the best-dates search looks for this many days in a row). */
 const cleanTripDays = (v) => Math.min(14, Math.max(1, Math.round(Number(v) || 1)));
 /** Adds one line to an event's change log (kept short: the latest 40). */
@@ -186,7 +196,7 @@ const isHost = (request, event) => {
 /** Loads an event; deletes it if it has expired; records this visit (keeps it alive). */
 async function getEvent(env, id, { touch = true } = {}) {
   const row = await env.DB.prepare(
-    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final, trip_days, log FROM events WHERE id = ?",
+    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final, trip_days, log, perms FROM events WHERE id = ?",
   )
     .bind(id)
     .first();
@@ -210,6 +220,7 @@ async function getEvent(env, id, { touch = true } = {}) {
     event.final = null;
   }
   event.trip_days = cleanTripDays(event.trip_days);
+  event.perms = parsePerms(event.perms);
   // a small change log: who removed whom, who saved or unsaved the date
   try {
     event.log = event.log ? JSON.parse(event.log) : [];
@@ -312,8 +323,14 @@ async function handleApi(request, env, url) {
     if (!event) return fail("This event doesn’t exist or has been removed.", 404);
     const body = await readBody(request);
     const out = {};
-    if (body && ("sections" in body || "trip_days" in body) && !isHost(request, event))
+    if (body && ("sections" in body || "trip_days" in body || "perms" in body) && !isHost(request, event))
       return fail("Only the person who created this event can change its settings.", 403);
+    if (body && "final" in body && !event.perms.final && !isHost(request, event))
+      return fail("Only the host can save the date for this event.", 403);
+    if (body && "perms" in body) {
+      out.perms = parsePerms(body.perms);
+      await env.DB.prepare("UPDATE events SET perms = ? WHERE id = ?").bind(JSON.stringify(out.perms), eventId).run();
+    }
     if (body && "trip_days" in body) {
       out.trip_days = cleanTripDays(body.trip_days);
       await env.DB.prepare("UPDATE events SET trip_days = ? WHERE id = ?").bind(out.trip_days, eventId).run();
@@ -336,6 +353,7 @@ async function handleApi(request, env, url) {
   if (parts.length === 4 && parts[2] === "responses" && method === "DELETE") {
     const event = await getEvent(env, eventId);
     if (!event) return fail("This event doesn’t exist or has been removed.", 404);
+    if (!event.perms.remove && !isHost(request, event)) return fail("Only the host can remove entries from this event.", 403);
     const row = await env.DB.prepare("SELECT name FROM responses WHERE id = ? AND event_id = ?").bind(parts[3], eventId).first();
     if (!row) return fail("That response was already removed.", 404);
     await env.DB.prepare("DELETE FROM responses WHERE id = ? AND event_id = ?").bind(parts[3], eventId).run();
@@ -403,7 +421,7 @@ function ensureSchema(env) {
   ])
     .then(async () => {
       // databases created by older versions: add the newer columns (fails harmlessly if present)
-      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"], ["trip_days", "INTEGER"], ["log", "TEXT"]]) {
+      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"], ["trip_days", "INTEGER"], ["log", "TEXT"], ["perms", "TEXT"]]) {
         await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} ${type}`).run().catch(() => {});
       }
     })

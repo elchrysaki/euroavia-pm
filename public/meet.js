@@ -471,6 +471,10 @@ function refreshOnReturn() {
 }
 
 const step = () => M.meeting.step || 15;
+/** What everyone may do (the creator always can): save the time, remove entries. */
+const perms = () => M.meeting.perms || { final: true, remove: true };
+const canSave = () => M.host || perms().final;
+const canRemove = () => M.host || perms().remove;
 const ROW = 30; // minutes per row, for every meeting (older 15-minute ones show two slots per row)
 /** A grid cell is a space-separated list of slot keys (one, or two for older meetings). */
 const keysOf = (cell) => cell.split(" ");
@@ -597,26 +601,54 @@ function paintBody() {
                <p class="mtg-side-note">Signed in as <b>${esc(meName)}</b> on this device. <button type="button" class="btn-link" id="notMe">Not you?</button></p>`
             : `<button type="button" class="btn btn-primary btn-block" id="addAvail">${icon(M.me ? "pencil" : "plus")} ${M.me ? "Edit your availability" : "Add availability"}</button>`
         }
-        <div class="card mtg-people">
-          <h3>Responses <span>${n}</span>${M.host ? '<small class="host-tag">You’re the host</small>' : ""}</h3>
+        <details class="card fold mtg-people"${M.peopleOpen ?? n <= 8 ? " open" : ""}>
+          <summary><span>Responses</span><span class="fold-faces" aria-hidden="true">${M.people
+            .slice(0, 3)
+            .map((p) => avatar(p.name, "sm"))
+            .join("")}</span><small>${n}</small></summary>
           ${
             n
               ? `<ul class="mtg-plist">${M.people
                   .map(
                     (p) => `<li class="person-row"><button type="button" class="person${M.filter === p.id ? " on" : ""}" data-person="${esc(p.id)}" aria-pressed="${M.filter === p.id}">${avatar(p.name, "sm")}<span>${esc(p.name)}${
                       M.me && p.id === M.me.id ? ' <small>(you)</small>' : ""
-                    }</span></button>${!editing ? `<button type="button" class="person-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${esc(p.name)}’s entry">${icon("x")}</button>` : ""}</li>`,
+                    }</span></button>${!editing && canRemove() ? `<button type="button" class="person-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${esc(p.name)}’s entry">${icon("x")}</button>` : ""}</li>`,
                   )
                   .join("")}</ul><p class="mtg-side-note">Tap a name to see only their times.</p>`
               : `<p class="mtg-side-note">Be the first: add the times you can make.</p>`
           }
-        </div>
+        </details>
         <div class="card mtg-who" id="who"></div>
         ${K.changeLogHtml(M.meeting.log || [], (e) => (e.start ? fmtLogTime(e.start, e.end) : ""))}
+        ${
+          M.host
+            ? `<details class="card fold host-card"${M.hostOpen ? " open" : ""}>
+          <summary><span>Host settings</span><small>Only you see this</small></summary>
+          <div class="host-sub">Everyone can…</div>
+          <label class="toggle-row"><span><b>Save the time</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms().final ? "checked" : ""} /></label>
+          <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms().remove ? "checked" : ""} /></label>
+        </details>`
+            : ""
+        }
       </aside>
     </div>`;
 
   $("#addAvail")?.addEventListener("click", startEditing);
+  body.querySelector(".mtg-people")?.addEventListener("toggle", (e) => (M.peopleOpen = e.target.open));
+  body.querySelector(".host-card")?.addEventListener("toggle", (e) => (M.hostOpen = e.target.open));
+  body.querySelectorAll("[data-perm]").forEach((box) =>
+    box.addEventListener("change", async () => {
+      const next = { ...perms(), [box.dataset.perm]: box.checked };
+      try {
+        await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { perms: next } });
+        M.meeting.perms = next;
+        K.toast(box.checked ? "Everyone can do that now" : "Only you can do that now");
+      } catch (err) {
+        box.checked = !box.checked;
+        K.toast(err.message, { error: true });
+      }
+    }),
+  );
   bindFinal();
   $("#doneEdit")?.addEventListener("click", () => {
     M.editing = false;
@@ -927,7 +959,7 @@ function paintWho() {
     ${yes.length ? `<h4><span class="sw yes"></span>Available</h4><ul class="who-list">${list(yes)}</ul>` : ""}
     ${maybe.length ? `<h4><span class="sw maybe"></span>Maybe</h4><ul class="who-list">${list(maybe)}</ul>` : ""}
     ${no.length ? `<h4><span class="sw none"></span>Unavailable</h4><ul class="who-list dim">${list(no)}</ul>` : ""}
-    ${M.meeting.kind === "dates" ? `<button type="button" class="btn btn-tinted btn-block who-final" data-make-final="${esc(M.focus)}">Save this time</button>` : ""}`;
+    ${M.meeting.kind === "dates" && canSave() ? `<button type="button" class="btn btn-tinted btn-block who-final" data-make-final="${esc(M.focus)}">Save this time</button>` : ""}`;
   el.querySelector("[data-make-final]")?.addEventListener("click", (e) => {
     const start = Number(keysOf(e.currentTarget.dataset.makeFinal)[0].slice(1));
     setFinal({ start, end: start + ROW });
@@ -978,7 +1010,7 @@ function finalHtml() {
     <div class="final-sub">Shown in ${esc(M.tz)} · ${yes} of ${M.people.length} available${maybe ? ` · ${maybe} maybe` : ""}</div>
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
-      <button type="button" class="btn btn-plain" data-final-clear>Unsave this time</button>
+      ${canSave() ? '<button type="button" class="btn btn-plain" data-final-clear>Unsave this time</button>' : ""}
     </div>
   </div>`;
 }
@@ -1037,7 +1069,7 @@ function paintBest(L) {
     <div><span class="best-label">Best time so far</span>
     <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b>
     <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} maybe` : ""}</span></div>
-    ${M.meeting.kind === "dates" ? '<button type="button" class="btn btn-tinted best-final" id="bestFinal">Save this time</button>' : ""}
+    ${M.meeting.kind === "dates" && canSave() ? '<button type="button" class="btn btn-tinted best-final" id="bestFinal">Save this time</button>' : ""}
   </div>`;
   el.querySelector("#bestFinal")?.addEventListener("click", () => {
     const start = Number(keysOf(best.slot)[0].slice(1));

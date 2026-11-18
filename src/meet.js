@@ -33,6 +33,17 @@ export async function freePin(env) {
   return randomId(10); // practically never: fall back to a long id
 }
 
+/** What everyone (not only the creator) may do: save the time, remove entries. Both on by default. */
+function parsePerms(v) {
+  let o = {};
+  try {
+    o = typeof v === "string" ? JSON.parse(v) : v || {};
+  } catch {
+    o = {};
+  }
+  return { final: o.final !== false, remove: o.remove !== false };
+}
+
 /** Adds one line to a meeting's change log (the latest 40). */
 async function addLog(env, m, entry) {
   let log = [];
@@ -108,6 +119,7 @@ export function ensureMeetSchema(env) {
           "ALTER TABLE meetings ADD COLUMN admin_token TEXT",
           "ALTER TABLE meetings ADD COLUMN final TEXT",
           "ALTER TABLE meetings ADD COLUMN log TEXT",
+          "ALTER TABLE meetings ADD COLUMN perms TEXT",
         ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
       ),
     )
@@ -144,6 +156,7 @@ const publicMeeting = (m) => ({
   title: m.title,
   description: m.description || "",
   creator: m.creator || "",
+  perms: parsePerms(m.perms),
   log: (() => {
     try {
       return m.log ? JSON.parse(m.log) : [];
@@ -303,8 +316,16 @@ export async function handleMeetings(request, env, parts) {
   if (parts.length === 2 && method === "PATCH") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
-    if (m.kind !== "dates") return fail("Only meetings on specific dates can have a final time.");
     const b = await readJson(request);
+    // the creator's settings: may everyone save the time / remove entries?
+    if (b && "perms" in b) {
+      if (!isHost(request, m)) return fail("Only the person who created this meeting can change its settings.", 403);
+      const perms = parsePerms(b.perms);
+      await env.DB.prepare("UPDATE meetings SET perms = ? WHERE id = ?").bind(JSON.stringify(perms), mid).run();
+      if (!("final" in b)) return json({ perms });
+    }
+    if (!parsePerms(m.perms).final && !isHost(request, m)) return fail("Only the person who created this meeting can save the time.", 403);
+    if (m.kind !== "dates") return fail("Only meetings on specific dates can have a final time.");
     let final = null;
     if (b?.final) {
       const start = Number(b.final.start);
@@ -329,6 +350,7 @@ export async function handleMeetings(request, env, parts) {
   if (parts.length === 4 && parts[2] === "people" && method === "DELETE") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
+    if (!parsePerms(m.perms).remove && !isHost(request, m)) return fail("Only the person who created this meeting can remove entries.", 403);
     const row = await env.DB.prepare("SELECT name FROM meet_people WHERE id = ? AND meeting_id = ?").bind(parts[3], mid).first();
     if (!row) return fail("That entry was already removed.", 404);
     await env.DB.prepare("DELETE FROM meet_people WHERE id = ? AND meeting_id = ?").bind(parts[3], mid).run();
