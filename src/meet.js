@@ -351,14 +351,22 @@ export async function handleMeetings(request, env, parts) {
     }
     if (!parsePerms(m.perms).final && !isHost(request, m)) return fail("Only the person who created this meeting can save the time.", 403);
     if (m.kind !== "dates") return fail("Only meetings on specific dates can have a final time.");
+    // one or more saved time blocks: { ranges: [{ start, end }, …] } (or the older single { start, end })
     let final = null;
     if (b?.final) {
-      const start = Number(b.final.start);
-      const end = Number(b.final.end);
+      const raw = Array.isArray(b.final.ranges) ? b.final.ranges : [b.final];
       const slots = new Set(JSON.parse(m.slots));
-      if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start || end - start > 24 * 60 || !slots.has(`t${start}`))
-        return fail("Pick a time inside this meeting.");
-      final = { start, end };
+      const ranges = [];
+      for (const r of raw.slice(0, 30)) {
+        const start = Number(r?.start);
+        const end = Number(r?.end);
+        if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start || end - start > 24 * 60 || !slots.has(`t${start}`))
+          return fail("Pick times inside this meeting.");
+        ranges.push({ start, end });
+      }
+      if (!ranges.length) return fail("Pick at least one time.");
+      ranges.sort((x, y) => x.start - y.start);
+      final = { start: ranges[0].start, end: ranges[0].end, ranges };
     }
     await env.DB.prepare("UPDATE meetings SET final = ? WHERE id = ?").bind(final ? JSON.stringify(final) : null, mid).run();
     let before = null;
@@ -367,7 +375,13 @@ export async function handleMeetings(request, env, parts) {
     } catch {
       before = null;
     }
-    const log = await addLog(env, m, final ? { action: "final", by: b?.by, start: final.start, end: final.end } : { action: "unfinal", by: b?.by, start: before?.start, end: before?.end });
+    const log = await addLog(
+      env,
+      m,
+      final
+        ? { action: "final", by: b?.by, start: final.start, end: final.end, n: final.ranges.length }
+        : { action: "unfinal", by: b?.by, start: before?.start, end: before?.end, n: before?.ranges?.length || 1 },
+    );
     return json({ final, log });
   }
 

@@ -303,6 +303,7 @@ function entryText(e) {
 /** The one span Google / Microsoft get: the whole period (their links take a single event). */
 function entrySpan(e) {
   const b = e.blocks;
+  if (e.separate) return b[0]; // separate time blocks: Google / Microsoft get the first, the details list them all
   if (b[0].allDay) return { allDay: { start: b[0].allDay.start, end: b[b.length - 1].allDay.end } };
   return { start: b[0].start, end: b[b.length - 1].end };
 }
@@ -937,6 +938,7 @@ window.addEventListener("popstate", () => route()); // looked up at call time: r
 let route = function route() {
   closeSheet(true);
   closeMenu();
+  $("#pickBar")?.remove();
   $(".flow")?.remove();
   $(".dp-wrap")?.remove();
   document.body.classList.remove("selecting");

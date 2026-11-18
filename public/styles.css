@@ -2315,3 +2315,13 @@ html[data-perf] .card.people-fold, html[data-perf] details.people-fold { backgro
   .select-bar .btn { padding: 0 0.75rem; font-size: 0.9375rem; min-height: 2.75rem; }
   .select-bar #selClear { padding: 0 0.5rem; }
 }
+
+/* ---- Meetings: select times to save ---- */
+.mtg-head-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.mtg-head-tools .btn, .pick-actions .btn { min-height: 2.5rem; border-radius: 999px; font-size: 0.9375rem; }
+.tgrid.picking { touch-action: none; cursor: crosshair; }
+.g-cell.picked { box-shadow: inset 0 0 0 2.5px var(--accent) !important; background-image: linear-gradient(color-mix(in srgb, var(--accent) 35%, transparent), color-mix(in srgb, var(--accent) 35%, transparent)); position: relative; z-index: 1; }
+.pick-bar { transform: translate(-50%, 0) !important; }
+.pick-bar .btn { white-space: nowrap; }
+.final-when.many { flex-direction: column; font-size: clamp(1.125rem, 3vw, 1.5rem); gap: 0.25rem; }
+.final-when.many small { display: block; font-size: 0.9375rem; font-weight: 500; letter-spacing: 0; color: var(--label-2); margin: 0.125rem 0 0.375rem; }

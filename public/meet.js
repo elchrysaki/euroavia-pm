@@ -570,6 +570,7 @@ function paintBody() {
   const { $, esc, icon, avatar } = K;
   const body = $("#mtgBody");
   if (!body) return;
+  if (!M.picking) document.getElementById("pickBar")?.remove();
   const n = M.people.length;
   const meName = M.me?.name;
   const editing = M.editing;
@@ -587,9 +588,14 @@ function paintBody() {
                    <button type="button" data-mode="maybe" aria-pressed="${M.mode === "maybe"}"><span class="sw maybe"></span>Maybe</button>
                    <button type="button" data-mode="erase" aria-pressed="${M.mode === "erase"}"><span class="sw none"></span>Unavailable</button>
                  </div>`
-              : `<div><h2>${M.filter ? `${esc(M.people.find((p) => p.id === M.filter)?.name || "")}’s availability` : "Group availability"}</h2>
+              : M.picking
+                ? `<div><h2>Select times to save</h2><p class="mtg-hint">Drag across the grid: 30 minutes, 2 hours, or several blocks on different days. Drag again over picked times to remove them.</p></div>
+                 <div class="pick-actions"><button type="button" class="btn btn-plain" id="pickCancel">Cancel</button></div>`
+                : `<div><h2>${M.filter ? `${esc(M.people.find((p) => p.id === M.filter)?.name || "")}’s availability` : "Group availability"}</h2>
                  <p class="mtg-hint">${M.filter ? `<button type="button" class="btn-link" id="clearFilter">Show everyone</button>` : n ? "Darker means more people are free. Hover over or tap a time to see who." : "No one has added their availability yet."}</p></div>
-                 <div class="legend mtg-legend" id="mtgLegend"></div>`
+                 <div class="mtg-head-tools"><div class="legend mtg-legend" id="mtgLegend"></div>${
+                   canSave() && M.meeting.kind === "dates" && !M.filter && n ? `<button type="button" class="btn btn-tinted" id="pickStart">${icon("check")} Select times</button>` : ""
+                 }</div>`
           }
         </div>
         <div id="mtgGrid"></div>
@@ -619,7 +625,7 @@ function paintBody() {
           }
         </details>
         <div class="card mtg-who" id="who"></div>
-        ${K.changeLogHtml(M.meeting.log || [], (e) => (e.start ? fmtLogTime(e.start, e.end) : ""))}
+        ${K.changeLogHtml(M.meeting.log || [], (e) => (e.start ? fmtLogTime(e.start, e.end) + (e.n > 1 ? ` and ${e.n - 1} more` : "") : ""))}
         ${
           M.host
             ? `<details class="card fold host-card"${M.hostOpen ? " open" : ""}>
@@ -635,6 +641,16 @@ function paintBody() {
     </div>`;
 
   $("#addAvail")?.addEventListener("click", startEditing);
+  $("#pickStart")?.addEventListener("click", () => {
+    M.picking = true;
+    M.picked = new Set();
+    M.focus = null;
+    paintBody();
+  });
+  $("#pickCancel")?.addEventListener("click", () => {
+    M.picking = false;
+    paintBody();
+  });
   body.querySelector(".mtg-people")?.addEventListener("toggle", (e) => (M.peopleOpen = e.target.open));
   body.querySelector(".host-card")?.addEventListener("toggle", (e) => (M.hostOpen = e.target.open));
   body.querySelector("[data-cal-edit-host]")?.addEventListener("click", openCalEditor);
@@ -791,8 +807,9 @@ function paintGridOnly() {
         rows += `<div class="${cls} solo${st ? ` ${st}` : ""}" data-s="${slot}"></div>`;
       } else {
         const k = score(slot);
-        const fin = M.meeting.final && keysOf(slot).some((key) => { const v = Number(key.slice(1)); return v >= M.meeting.final.start && v < M.meeting.final.end; }) ? " final" : "";
-        rows += `<div class="${cls} g${k ? " heat" : ""}${fin}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}"></div>`;
+        const fin = M.meeting.final && keysOf(slot).some((key) => inFinal(Number(key.slice(1)))) ? " final" : "";
+        const pick = M.picking && M.picked.has(slot) ? " picked" : "";
+        rows += `<div class="${cls} g${k ? " heat" : ""}${fin}${pick}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}" data-c="${ci}" data-r="${r}"></div>`;
       }
     });
   });
@@ -808,6 +825,7 @@ function paintGridOnly() {
     }),
   );
   if (M.editing) bindEditGrid(host.querySelector(".tgrid"));
+  else if (M.picking) bindPickGrid(host.querySelector(".tgrid"));
   else bindGroupGrid(host.querySelector(".tgrid"));
   const legend = $("#mtgLegend");
   if (legend && !M.filter) {
@@ -912,6 +930,80 @@ function flushSave() {
     });
 }
 
+/* Select times to save: press and drag a rectangle (like marking your availability). Starting on a
+   picked time removes instead. A bar at the bottom shows the total and saves them. */
+function bindPickGrid(grid) {
+  const cells = [...grid.querySelectorAll(".g-cell[data-s]")];
+  let drag = null;
+  const apply = (end) => {
+    const c0 = Math.min(drag.c, end.c);
+    const c1 = Math.max(drag.c, end.c);
+    const r0 = Math.min(drag.r, end.r);
+    const r1 = Math.max(drag.r, end.r);
+    for (const el of cells) {
+      const inside = +el.dataset.c >= c0 && +el.dataset.c <= c1 && +el.dataset.r >= r0 && +el.dataset.r <= r1;
+      el.classList.toggle("picked", inside ? drag.add : drag.before.has(el.dataset.s));
+    }
+  };
+  grid.addEventListener("pointerdown", (e) => {
+    const cell = e.target.closest(".g-cell[data-s]");
+    if (!cell) return;
+    e.preventDefault();
+    grid.setPointerCapture(e.pointerId);
+    drag = { c: +cell.dataset.c, r: +cell.dataset.r, add: !M.picked.has(cell.dataset.s), before: new Set(M.picked), last: cell };
+    apply(drag);
+  });
+  grid.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".tgrid .g-cell[data-s]");
+    if (!cell || cell === drag.last) return;
+    drag.last = cell;
+    apply({ c: +cell.dataset.c, r: +cell.dataset.r });
+  });
+  const end = () => {
+    if (!drag) return;
+    drag = null;
+    M.picked = new Set(cells.filter((el) => el.classList.contains("picked")).map((el) => el.dataset.s));
+    paintPickBar();
+  };
+  grid.addEventListener("pointerup", end);
+  grid.addEventListener("pointercancel", end);
+  grid.addEventListener("lostpointercapture", end);
+  grid.classList.add("picking");
+  paintPickBar();
+}
+function paintPickBar() {
+  let bar = document.getElementById("pickBar");
+  if (!M.picking) return bar?.remove();
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "pickBar";
+    bar.className = "select-bar show pick-bar";
+    document.body.append(bar);
+  }
+  const ranges = cellsToRanges(M.picked);
+  const mins = ranges.reduce((t, r) => t + r.end - r.start, 0);
+  const len = mins >= 60 ? `${Math.floor(mins / 60)} h${mins % 60 ? ` ${mins % 60} min` : ""}` : `${mins} min`;
+  bar.innerHTML = ranges.length
+    ? `<span>${ranges.length > 1 ? `${ranges.length} blocks · ` : ""}${len}</span><button type="button" class="btn btn-plain" id="pickClear">Clear</button><button type="button" class="btn btn-primary" id="pickSave">Save ${ranges.length > 1 ? "times" : "time"}</button>`
+    : `<span>Drag across the times</span><button type="button" class="btn btn-plain" id="pickClose">Cancel</button>`;
+  bar.querySelector("#pickClear")?.addEventListener("click", () => {
+    M.picked = new Set();
+    paintGridOnly();
+  });
+  bar.querySelector("#pickClose")?.addEventListener("click", () => {
+    M.picking = false;
+    paintBody();
+  });
+  bar.querySelector("#pickSave")?.addEventListener("click", async () => {
+    const saved = await setFinal({ ranges });
+    if (saved) {
+      M.picking = false;
+      paintBody();
+    }
+  });
+}
+
 function bindGroupGrid(grid) {
   const focus = (cell) => {
     if (!cell || M.focus === cell.dataset.s) return;
@@ -977,6 +1069,41 @@ function fmtLogTime(start, end) {
   return `${day}, ${t(a)}–${t(b)}`;
 }
 
+/** The saved blocks: [{ start, end }] in UTC epoch minutes (older meetings saved one). */
+const finalRanges = () => {
+  const f = M.meeting.final;
+  if (!f) return [];
+  return Array.isArray(f.ranges) && f.ranges.length ? f.ranges : [{ start: f.start, end: f.end }];
+};
+const inFinal = (minute) => finalRanges().some((r) => minute >= r.start && minute < r.end);
+/** Who can make every slot of one saved block. */
+function rangeCount(r) {
+  const keys = M.meeting.slots.filter((k) => {
+    const v = Number(k.slice(1));
+    return v >= r.start && v < r.end;
+  });
+  let yes = 0;
+  let maybe = 0;
+  for (const p of M.people) {
+    const st = setsOf(p);
+    if (keys.length && keys.every((k) => st.yes.has(k))) yes += 1;
+    else if (keys.length && keys.every((k) => st.yes.has(k) || st.maybe.has(k))) maybe += 1;
+  }
+  return { yes, maybe };
+}
+/** Picked grid cells → merged blocks of time. */
+function cellsToRanges(cells) {
+  const step = M.meeting.step || 15;
+  const starts = [...new Set([...cells].flatMap((c) => keysOf(c).map((k) => Number(k.slice(1)))))].sort((a, b) => a - b);
+  const ranges = [];
+  for (const st of starts) {
+    const last = ranges[ranges.length - 1];
+    if (last && last.end === st) last.end = st + step;
+    else ranges.push({ start: st, end: st + step });
+  }
+  return ranges;
+}
+
 /* ---- The decided time: everyone sees it and can add it to their calendar (in their own time zone) ---- */
 /** The calendar entry: the creator's label / place / description, or the meeting's own title and description. */
 function finalItem() {
@@ -990,6 +1117,7 @@ function finalItem() {
     url: `${location.origin}/m/${M.meeting.id}`,
     start: new Date(f.start * 60000),
     end: new Date(f.end * 60000),
+    blocks: finalRanges().map((r) => ({ start: new Date(r.start * 60000), end: new Date(r.end * 60000) })),
   };
 }
 const canEditCal = () => M.host || M.hasHost === false;
@@ -1024,14 +1152,10 @@ function finalHtml() {
   const { esc, icon } = K;
   const it = finalItem();
   if (!it) return "";
-  const day = it.start.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: M.tz });
-  const t = (d) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: M.tz });
+  const ranges = finalRanges();
   let yes = 0;
   let maybe = 0;
-  const keys = M.meeting.slots.filter((k) => {
-    const v = Number(k.slice(1));
-    return v >= M.meeting.final.start && v < M.meeting.final.end;
-  });
+  const keys = M.meeting.slots.filter((k) => inFinal(Number(k.slice(1))));
   for (const p of M.people) {
     const st = setsOf(p);
     if (keys.length && keys.every((k) => st.yes.has(k))) yes += 1;
@@ -1039,8 +1163,13 @@ function finalHtml() {
   }
   return `<div class="card final-card" id="mtgFinal">
     <div class="final-label">${icon("check")} It’s decided</div>
-    <div class="final-when"><span>${esc(day)}</span><span>${esc(t(it.start))}–${esc(t(it.end))}</span></div>
-    <div class="final-sub">Shown in ${esc(M.tz)} · ${yes} of ${M.people.length} available${maybe ? ` · ${maybe} maybe` : ""}</div>
+    <div class="final-when${ranges.length > 1 ? " many" : ""}">${ranges
+      .map((r) => {
+        const c = rangeCount(r);
+        return `<span>${esc(fmtLogTime(r.start, r.end))}${ranges.length > 1 ? `<small>${c.yes} of ${M.people.length} available${c.maybe ? ` · ${c.maybe} maybe` : ""}</small>` : ""}</span>`;
+      })
+      .join("")}</div>
+    <div class="final-sub">Shown in ${esc(M.tz)}${ranges.length > 1 ? "" : ` · ${yes} of ${M.people.length} available${maybe ? ` · ${maybe} maybe` : ""}`}</div>
     ${
       (M.meeting.cal?.title && M.meeting.cal.title !== M.meeting.title) || M.meeting.cal?.location
         ? `<div class="cal-summary">${M.meeting.cal.title && M.meeting.cal.title !== M.meeting.title ? `<span class="cs-row"><b>Label</b>${esc(M.meeting.cal.title)}</span>` : ""}${
@@ -1051,7 +1180,7 @@ function finalHtml() {
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
       ${canEditCal() ? '<button type="button" class="btn btn-tinted" data-cal-edit>Edit calendar entry</button>' : ""}
-      ${canSave() ? '<button type="button" class="btn btn-plain" data-final-clear>Unsave this time</button>' : ""}
+      ${canSave() ? `<button type="button" class="btn btn-plain" data-final-clear>Unsave ${ranges.length > 1 ? "these times" : "this time"}</button>` : ""}
     </div>
   </div>`;
 }
@@ -1060,7 +1189,9 @@ function bindFinal() {
   if (!card) return;
   card.querySelector("[data-final-ics]").addEventListener("click", () => {
     const it = finalItem();
-    K.openAddToCalendar({ title: it.title, location: it.location, details: it.details, url: it.url, blocks: [{ start: it.start, end: it.end }] });
+    const many = it.blocks.length > 1;
+    const details = many ? `${it.details}\n\nTimes: ${finalRanges().map((r) => fmtLogTime(r.start, r.end)).join("; ")}` : it.details;
+    K.openAddToCalendar({ title: it.title, location: it.location, details, url: it.url, blocks: it.blocks, separate: true });
   });
   card.querySelector("[data-cal-edit]")?.addEventListener("click", openCalEditor);
   card.querySelector("[data-final-clear]")?.addEventListener("click", () => {
@@ -1074,12 +1205,15 @@ async function setFinal(final) {
     const res = await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { final, by } });
     M.meeting.final = res.final;
     if (res.log) M.meeting.log = res.log;
-    K.toast(final ? "Time saved — everyone can see it" : "The time was unsaved");
+    K.toast(final ? (final.ranges?.length > 1 ? "Times saved — everyone can see them" : "Time saved — everyone can see it") : "The time was unsaved");
     K.buzz?.([15, 60, 15]);
+    M.picking = false;
     paintBody();
     if (final) window.scrollTo({ top: 0, behavior: K.reducedMotion?.() ? "auto" : "smooth" });
+    return true;
   } catch (err) {
     K.toast(err.message, { error: true });
+    return false;
   }
 }
 
@@ -1089,7 +1223,7 @@ function paintBest(L) {
   const el = $("#mtgBest");
   if (!el) return;
   const n = M.people.length;
-  if (!n || M.editing) return void (el.innerHTML = "");
+  if (!n || M.editing || M.picking) return void (el.innerHTML = "");
   const len = ROW;
   let best = null;
   const better = (a) => !best || a.k > best.k || (a.k === best.k && a.end - a.start > best.end - best.start);
@@ -1109,6 +1243,14 @@ function paintBest(L) {
   if (!best) return void (el.innerHTML = "");
   let yes = 0;
   for (const p of M.people) if (stateIn(setsOf(p), best.slot) === "yes") yes += 1;
+  if (M.meeting.final && !M.showBest) {
+    el.innerHTML = `<button type="button" class="best-note" id="showBestT">${icon("clock")}<span>Best time so far: <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b></span><span class="best-note-go" aria-hidden="true">›</span></button>`;
+    el.querySelector("#showBestT").addEventListener("click", () => {
+      M.showBest = true;
+      paintGridOnly();
+    });
+    return;
+  }
   el.innerHTML = `<div class="card best-time">
     <span class="best-ico">${icon("clock")}</span>
     <div><span class="best-label">Best time so far</span>
