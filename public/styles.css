@@ -2352,3 +2352,22 @@ html[data-perf] .card.people-fold, html[data-perf] details.people-fold { backgro
 html[data-perf] .changelog.people-fold { background: none !important; }
 .changelog.people-fold ul { margin: 0.25rem 0.25rem 0; }
 .changelog.people-fold li { font-size: 0.9375rem; }
+
+/* ---- Select times: picked times are dark and striped (never mistaken for availability) ---- */
+.g-cell.picked {
+  background: repeating-linear-gradient(135deg, #0b2a6b 0 6px, #123c96 6px 12px) !important;
+  box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 0 4px #0b2a6b !important;
+}
+@media (prefers-color-scheme: dark) {
+  .g-cell.picked { background: repeating-linear-gradient(135deg, #f2f7ff 0 6px, #c9dcff 6px 12px) !important; box-shadow: inset 0 0 0 2px #0a2a6a, inset 0 0 0 4px #f2f7ff !important; }
+}
+.g-cell.pinned { box-shadow: inset 0 0 0 3px var(--accent), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent) !important; position: relative; z-index: 2; }
+.pick-explain { display: flex; align-items: flex-start; gap: 0.5rem; width: 100%; margin: 0; padding: 0.75rem 0.875rem; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 0.9375rem; color: var(--label-2); line-height: 1.4; }
+.pick-explain svg { width: 18px; height: 18px; flex: none; margin-top: 0.0625rem; color: var(--accent); }
+.pick-explain b { color: var(--label); }
+.mtg-grid-head { flex-wrap: wrap; }
+.mtg-grid-head > div:first-child { flex: 1 1 18rem; }
+.pick-start { min-height: 2.75rem !important; padding: 0 1.25rem !important; }
+@media (prefers-color-scheme: dark) {
+  .g-cell.picked { background: repeating-linear-gradient(135deg, #04122e 0 6px, #0b2559 6px 12px) !important; box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 0 4px #04122e !important; }
+}

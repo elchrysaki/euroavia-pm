@@ -594,12 +594,13 @@ function paintBody() {
                    <button type="button" data-mode="erase" aria-pressed="${M.mode === "erase"}"><span class="sw none"></span>Unavailable</button>
                  </div>`
               : M.picking
-                ? `<div><h2>Select times to save</h2><p class="mtg-hint">Drag across the grid: 30 minutes, 2 hours, or several blocks on different days. Drag again over picked times to remove them.</p></div>
+                ? `<div><h2>Select times</h2><p class="mtg-hint">Drag across the grid: 30 minutes, 2 hours, or several blocks on different days. Drag over picked times again to remove them. Then see who’s free${canSave() ? " or save them" : ""}.</p></div>
                  <div class="pick-actions"><button type="button" class="btn btn-plain" id="pickCancel">Cancel</button></div>`
                 : `<div><h2>${M.filter ? `${esc(M.people.find((p) => p.id === M.filter)?.name || "")}’s availability` : "Group availability"}</h2>
-                 <p class="mtg-hint">${M.filter ? `<button type="button" class="btn-link" id="clearFilter">Show everyone</button>` : n ? "Darker means more people are free. Hover over or tap a time to see who." : "No one has added their availability yet."}</p></div>
+                 <p class="mtg-hint">${M.filter ? `<button type="button" class="btn-link" id="clearFilter">Show everyone</button>` : n ? "Darker means more people are free. Hover over a time to see who, or click it to keep it open." : "No one has added their availability yet."}</p></div>
+                 ${M.meeting.kind === "dates" && !M.filter && n ? `<p class="pick-explain">${icon("clock")}<span><b>Select times</b> to see who’s free for exactly those times${canSave() ? ", or to save them as the final time" : ""}.</span></p>` : ""}
                  <div class="mtg-head-tools"><div class="legend mtg-legend" id="mtgLegend"></div>${
-                   canSave() && M.meeting.kind === "dates" && !M.filter && n ? `<button type="button" class="btn btn-tinted" id="pickStart">${icon("check")} Select times</button>` : ""
+                   M.meeting.kind === "dates" && !M.filter && n ? `<button type="button" class="btn btn-primary pick-start" id="pickStart">${icon("check")} Select times</button>` : ""
                  }</div>`
           }
         </div>
@@ -977,6 +978,37 @@ function bindPickGrid(grid) {
   grid.classList.add("picking");
   paintPickBar();
 }
+/** Who can make every picked time: available, maybe, can't (like Who's free? for dates). */
+function openPickWho(ranges) {
+  const { esc, icon, avatar } = K;
+  const keys = M.meeting.slots.filter((k) => ranges.some((r) => Number(k.slice(1)) >= r.start && Number(k.slice(1)) < r.end));
+  const yes = [];
+  const maybe = [];
+  const no = [];
+  for (const p of M.people) {
+    const st = setsOf(p);
+    if (keys.every((k) => st.yes.has(k))) yes.push(p.name);
+    else if (keys.every((k) => st.yes.has(k) || st.maybe.has(k))) maybe.push(p.name);
+    else no.push(p.name);
+  }
+  const section = (label, names, sw) =>
+    names.length ? `<h4><span class="swatch ${sw}"></span>${label} · ${names.length}</h4>${names.map((x) => `<div class="name-chip">${avatar(x, "sm")} ${esc(x)}</div>`).join("")}` : "";
+  K.openSheet(`
+    <div class="sheet-head"><div><h2>${ranges.length > 1 ? `${ranges.length} blocks of time` : esc(fmtLogTime(ranges[0].start, ranges[0].end))}</h2><div class="sheet-sub">${
+      ranges.length > 1 ? esc(ranges.map((r) => fmtLogTime(r.start, r.end)).join(" · ")) : "Who can make all of it"
+    }</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    <div class="tally">
+      <div class="t-yes"><b>${yes.length}</b><span>Available</span></div>
+      <div class="t-maybe"><b>${maybe.length}</b><span>Maybe</span></div>
+      <div class="t-no"><b>${no.length}</b><span>Can’t</span></div>
+    </div>
+    <div class="name-list">${section("Available", yes, "yes")}${section("Maybe", maybe, "maybe")}${section("Can’t make all of it", no, "erase")}</div>
+    ${canSave() ? `<div class="sheet-final"><button type="button" class="btn btn-tinted btn-block" id="pickWhoSave">${icon("check")} Save ${ranges.length > 1 ? "these times" : "this time"}</button></div>` : ""}`);
+  document.getElementById("pickWhoSave")?.addEventListener("click", async () => {
+    K.closeSheet();
+    await setFinal({ ranges });
+  });
+}
 function paintPickBar() {
   let bar = document.getElementById("pickBar");
   if (!M.picking) return bar?.remove();
@@ -990,8 +1022,11 @@ function paintPickBar() {
   const mins = ranges.reduce((t, r) => t + r.end - r.start, 0);
   const len = mins >= 60 ? `${Math.floor(mins / 60)} h${mins % 60 ? ` ${mins % 60} min` : ""}` : `${mins} min`;
   bar.innerHTML = ranges.length
-    ? `<span>${ranges.length > 1 ? `${ranges.length} blocks · ` : ""}${len}</span><button type="button" class="btn btn-plain" id="pickClear">Clear</button><button type="button" class="btn btn-primary" id="pickSave">Save ${ranges.length > 1 ? "times" : "time"}</button>`
+    ? `<span>${ranges.length > 1 ? `${ranges.length} blocks · ` : ""}${len}</span><button type="button" class="btn btn-plain" id="pickClear">Clear</button>${
+        canSave() ? `<button type="button" class="btn btn-tinted" id="pickSave">Save</button>` : ""
+      }<button type="button" class="btn btn-primary" id="pickWho">Who’s free?</button>`
     : `<span>Drag across the times</span><button type="button" class="btn btn-plain" id="pickClose">Cancel</button>`;
+  bar.querySelector("#pickWho")?.addEventListener("click", () => openPickWho(ranges));
   bar.querySelector("#pickClear")?.addEventListener("click", () => {
     M.picked = new Set();
     paintGridOnly();
@@ -1017,8 +1052,28 @@ function bindGroupGrid(grid) {
     M.focus = cell.dataset.s;
     paintWho();
   };
-  grid.addEventListener("pointerover", (e) => e.pointerType === "mouse" && focus(e.target.closest(".g-cell[data-s]")));
-  grid.addEventListener("click", (e) => focus(e.target.closest(".g-cell[data-s]")));
+  grid.addEventListener("pointerover", (e) => e.pointerType === "mouse" && !M.pinned && focus(e.target.closest(".g-cell[data-s]")));
+  grid.addEventListener("click", (e) => {
+    const cell = e.target.closest(".g-cell[data-s]");
+    if (!cell) return;
+    if (M.pinned && M.focus === cell.dataset.s) {
+      // click the pinned time again: let go
+      M.pinned = false;
+      grid.querySelector(".g-cell.pinned")?.classList.remove("pinned");
+      return paintWho();
+    }
+    M.pinned = true;
+    grid.querySelector(".g-cell.pinned")?.classList.remove("pinned");
+    M.focus = null;
+    focus(cell);
+    cell.classList.add("pinned");
+  });
+  grid.addEventListener("pointerleave", () => {
+    if (M.pinned || !M.focus) return;
+    grid.querySelector(".g-cell.focus")?.classList.remove("focus");
+    M.focus = null;
+    paintWho();
+  });
 }
 
 function describeSlot(cell) {
@@ -1042,7 +1097,7 @@ function paintWho() {
   if (M.editing || !n) return void (el.hidden = true);
   el.hidden = false;
   if (!M.focus) {
-    el.innerHTML = `<p class="mtg-side-note">Hover over or tap a time in the grid to see who can make it.</p>`;
+    el.innerHTML = `<p class="mtg-side-note">Hover over a time to see who can make it. Click it to keep it here.</p>`;
     return;
   }
   const yes = [];
