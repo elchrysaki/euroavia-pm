@@ -939,6 +939,7 @@ let route = function route() {
   closeSheet(true);
   closeMenu();
   $("#pickBar")?.remove();
+  $$(".day-peek").forEach((x) => x.remove());
   $(".flow")?.remove();
   $(".dp-wrap")?.remove();
   document.body.classList.remove("selecting");
@@ -1994,8 +1995,51 @@ function calendarHtml() {
   `;
 }
 
+/** Hovering a day (mouse): a small card with who's free; clicking still opens the full view. */
+function bindDayPeek(body) {
+  let peek = null;
+  const hide = () => {
+    peek?.remove();
+    peek = null;
+  };
+  body.addEventListener("pointerover", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const cell = e.target.closest(".day[data-date]");
+    if (!cell || current.filter) return hide();
+    const date = cell.dataset.date;
+    const s = current.agg.days.get(date) || { yes: [], maybe: [] };
+    const n = current.responses.length;
+    if (!peek) {
+      peek = document.createElement("div");
+      peek.className = "day-peek";
+      peek.setAttribute("role", "tooltip");
+      document.body.append(peek);
+    }
+    const names = (list) => list.map((x) => esc(x)).join(", ");
+    peek.innerHTML = `<b>${esc(fmtDate(date, { weekday: "long", day: "numeric", month: "long" }))}</b>
+      <span class="dp-count">${s.yes.length + s.maybe.length} of ${n} can make it</span>
+      ${s.yes.length ? `<span class="dp-line"><i class="swatch yes"></i>${names(s.yes)}</span>` : ""}
+      ${s.maybe.length ? `<span class="dp-line"><i class="swatch maybe"></i>${names(s.maybe)}</span>` : ""}
+      ${!s.yes.length && !s.maybe.length ? `<span class="dp-line dim">Nobody yet</span>` : ""}
+      <small>Click to see everyone${current.canSave ? " or save it" : ""}</small>`;
+    const r = cell.getBoundingClientRect();
+    const w = peek.offsetWidth;
+    const h = peek.offsetHeight;
+    let left = r.left + r.width / 2 - w / 2;
+    left = Math.max(8, Math.min(left, innerWidth - w - 8));
+    let top = r.top - h - 10;
+    if (top < 70) top = r.bottom + 10;
+    peek.style.left = `${left}px`;
+    peek.style.top = `${top}px`;
+  });
+  body.addEventListener("pointerleave", hide);
+  body.addEventListener("click", hide);
+  window.addEventListener("scroll", hide, { passive: true });
+}
+
 function bindCalendar() {
   const body = $("#tabBody");
+  bindDayPeek(body);
   body.addEventListener("click", (e) => {
     const best = e.target.closest("[data-best]");
     if (best) return openDaySheet(best.dataset.best.split(","));
