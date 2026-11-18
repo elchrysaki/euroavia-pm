@@ -1749,6 +1749,27 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
         </div>
         <div class="event-cta fade-in d1">${ctaHtml}</div>
         ${
+          host
+            ? `<details class="card fold people-fold host-card"${current.hostOpen ? " open" : ""}>
+          <summary><span>Host settings</span><small>Only you see this</small></summary>
+          <p class="fold-note">Change any of it at any time.</p>
+          <div class="host-sub">The trip</div>
+          <label class="host-len"><span><b>How long is the trip?</b><small>The best-dates search looks for this many days in a row</small></span>
+            <select data-trip-days>${tripLengthOptions(event.trip_days || 1)}</select></label>
+          <div class="host-len-custom" data-trip-custom hidden>${daysStepperHtml(event.trip_days || 1)}</div>
+          <div class="host-row"><span><b>Calendar entry</b><small>Label, places, activities and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
+          <div class="host-sub">Sections</div>
+          <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
+          <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
+          <div class="host-sub">Everyone can…</div>
+          <label class="toggle-row"><span><b>Save the date</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms.final ? "checked" : ""} /></label>
+          <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms.remove ? "checked" : ""} /></label>
+          ${sec.places ? `<label class="toggle-row"><span><b>Suggest new places</b><small>Off: people vote on the places already listed</small></span><input type="checkbox" role="switch" data-perm="places" ${perms.places !== false ? "checked" : ""} /></label>` : ""}
+          ${sec.activities ? `<label class="toggle-row"><span><b>Add activities</b><small>Off: only you add them; others can like</small></span><input type="checkbox" role="switch" data-perm="activities" ${perms.activities !== false ? "checked" : ""} /></label>` : ""}
+        </details>`
+            : ""
+        }
+        ${
           responses.length
             ? `<details class="card fold people-fold"${current.peopleOpen ?? responses.length <= 6 ? " open" : ""}>
           <summary><span>Who responded</span><span class="fold-faces" aria-hidden="true">${responses
@@ -1768,27 +1789,6 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
             : ""
         }
         ${changeLogHtml(event.log || [])}
-        ${
-          host
-            ? `<details class="card fold host-card"${current.hostOpen ? " open" : ""}>
-          <summary><span>Host settings</span><small>Only you see this</small></summary>
-          <p>Only you see this. Change any of it at any time.</p>
-          <div class="host-sub">The trip</div>
-          <label class="host-len"><span><b>How long is the trip?</b><small>The best-dates search looks for this many days in a row</small></span>
-            <select data-trip-days>${tripLengthOptions(event.trip_days || 1)}</select></label>
-          <div class="host-len-custom" data-trip-custom hidden>${daysStepperHtml(event.trip_days || 1)}</div>
-          <div class="host-row"><span><b>Calendar entry</b><small>Label, places, activities and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
-          <div class="host-sub">Sections</div>
-          <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
-          <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
-          <div class="host-sub">Everyone can…</div>
-          <label class="toggle-row"><span><b>Save the date</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms.final ? "checked" : ""} /></label>
-          <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms.remove ? "checked" : ""} /></label>
-          ${sec.places ? `<label class="toggle-row"><span><b>Suggest new places</b><small>Off: people vote on the places already listed</small></span><input type="checkbox" role="switch" data-perm="places" ${perms.places !== false ? "checked" : ""} /></label>` : ""}
-          ${sec.activities ? `<label class="toggle-row"><span><b>Add activities</b><small>Off: only you add them; others can like</small></span><input type="checkbox" role="switch" data-perm="activities" ${perms.activities !== false ? "checked" : ""} /></label>` : ""}
-        </details>`
-            : ""
-        }
       </aside>
       <section class="event-main">
         <div class="date-side">${finalTripHtml(event, host)}</div>

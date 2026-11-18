@@ -2452,3 +2452,11 @@ body.has-flow #app, body.has-flow .topbar, body.has-flow .action-bar { visibilit
 .days-stepper input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 .days-stepper label span { color: var(--label-2); font-weight: 500; }
 .len-custom[hidden], .host-len-custom[hidden] { display: none; }
+
+/* ---- Host settings: right under the Add / Edit button, same open look as Who responded and Change log ---- */
+.host-card.people-fold { padding: 0; margin-top: 1.25rem; display: block; }
+html[data-perf] .host-card.people-fold { background: none !important; }
+.host-card.people-fold > :not(summary):not(.fold-note) { margin-left: 0.25rem; margin-right: 0.25rem; }
+.host-card.people-fold .fold-note { margin-bottom: 0.25rem; font-size: 0.9375rem; color: var(--label-2); }
+.host-card.people-fold .host-sub { margin-top: 1rem; }
+.host-card.people-fold .host-sub:first-of-type { margin-top: 0.875rem; }

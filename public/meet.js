@@ -617,6 +617,21 @@ function paintBody() {
                <p class="mtg-side-note">Signed in as <b>${esc(meName)}</b> on this device. <button type="button" class="btn-link" id="notMe">Not you?</button></p>`
             : `<button type="button" class="btn btn-primary btn-block" id="addAvail">${icon(M.me ? "pencil" : "plus")} ${M.me ? "Edit your availability" : "Add availability"}</button>`
         }
+        ${
+          M.host
+            ? `<details class="card fold people-fold host-card"${M.hostOpen ? " open" : ""}>
+          <summary><span>Host settings</span><small>Only you see this</small></summary>
+          <p class="fold-note">Change any of it at any time.</p>
+          <div class="host-sub">The meeting</div>
+          <label class="host-len"><span><b>About how long?</b><small>Best times look for slots this long</small></span>
+            <select data-meet-dur>${MEET_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (M.meeting.duration || 0) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <div class="host-row"><span><b>Calendar entry</b><small>Label, place and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
+          <div class="host-sub">Everyone can…</div>
+          <label class="toggle-row"><span><b>Save the time</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms().final ? "checked" : ""} /></label>
+          <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms().remove ? "checked" : ""} /></label>
+        </details>`
+            : ""
+        }
         <details class="card fold mtg-people"${M.peopleOpen ?? n <= 8 ? " open" : ""}>
           <summary><span>Responses</span><span class="fold-faces" aria-hidden="true">${M.people
             .slice(0, 3)
@@ -636,20 +651,6 @@ function paintBody() {
         </details>
         <div class="card mtg-who" id="who"></div>
         ${K.changeLogHtml(M.meeting.log || [], (e) => (e.start ? fmtLogTime(e.start, e.end) + (e.n > 1 ? ` and ${e.n - 1} more` : "") : ""))}
-        ${
-          M.host
-            ? `<details class="card fold host-card"${M.hostOpen ? " open" : ""}>
-          <summary><span>Host settings</span><small>Only you see this</small></summary>
-          <div class="host-sub">The meeting</div>
-          <label class="host-len"><span><b>About how long?</b><small>Best times look for slots this long</small></span>
-            <select data-meet-dur>${MEET_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (M.meeting.duration || 0) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-          <div class="host-row"><span><b>Calendar entry</b><small>Label, place and description people get in their calendar</small></span><button type="button" class="btn btn-tinted" data-cal-edit-host>Edit</button></div>
-          <div class="host-sub">Everyone can…</div>
-          <label class="toggle-row"><span><b>Save the time</b><small>Off: only you can save or unsave it</small></span><input type="checkbox" role="switch" data-perm="final" ${perms().final ? "checked" : ""} /></label>
-          <label class="toggle-row"><span><b>Remove entries</b><small>Off: only you can remove someone</small></span><input type="checkbox" role="switch" data-perm="remove" ${perms().remove ? "checked" : ""} /></label>
-        </details>`
-            : ""
-        }
       </aside>
     </div>`;
 
