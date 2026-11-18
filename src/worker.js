@@ -169,6 +169,14 @@ function parseSections(v) {
   return { places: o.places !== false, activities: o.activities !== false };
 }
 const cleanSections = (v) => ({ places: v?.places !== false, activities: v?.activities !== false });
+/** How long the trip is, in days (the best-dates search looks for this many days in a row). */
+const cleanTripDays = (v) => Math.min(14, Math.max(1, Math.round(Number(v) || 1)));
+/** Adds one line to an event's change log (kept short: the latest 40). */
+async function addLog(env, event, entry) {
+  const log = [{ at: Date.now(), by: cleanText(entry.by, LIMITS.name) || "Someone", ...entry, by: cleanText(entry.by, LIMITS.name) || "Someone" }, ...(event.log || [])].slice(0, 40);
+  await env.DB.prepare("UPDATE events SET log = ? WHERE id = ?").bind(JSON.stringify(log), event.id).run();
+  return log;
+}
 /** The host is whoever created the event: their browser keeps the admin token. */
 const isHost = (request, event) => {
   const t = request.headers.get("x-wingman-admin") || "";
@@ -178,7 +186,7 @@ const isHost = (request, event) => {
 /** Loads an event; deletes it if it has expired; records this visit (keeps it alive). */
 async function getEvent(env, id, { touch = true } = {}) {
   const row = await env.DB.prepare(
-    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final FROM events WHERE id = ?",
+    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final, trip_days, log FROM events WHERE id = ?",
   )
     .bind(id)
     .first();
@@ -195,11 +203,18 @@ async function getEvent(env, id, { touch = true } = {}) {
   }
   event.delete_at = deleteAt(event);
   event.sections = parseSections(event.sections);
-  // the host's final choice: { dates: ["YYYY-MM-DD", …] } or null
+  // the decided date(s): { dates: ["YYYY-MM-DD", …] } or null
   try {
     event.final = event.final ? JSON.parse(event.final) : null;
   } catch {
     event.final = null;
+  }
+  event.trip_days = cleanTripDays(event.trip_days);
+  // a small change log: who removed whom, who saved or unsaved the date
+  try {
+    event.log = event.log ? JSON.parse(event.log) : [];
+  } catch {
+    event.log = [];
   }
   Object.defineProperty(event, "admin_token", { value: event.admin_token, enumerable: false }); // never sent to the page
   delete event.last_seen;
@@ -258,9 +273,9 @@ async function handleApi(request, env, url) {
     const id = await freePin(env);
     const admin = randomId(24);
     await env.DB.prepare(
-      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO events (id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, trip_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now(), Date.now(), admin, JSON.stringify(cleanSections(body.sections)))
+      .bind(id, title, description, Number(start.slice(0, 4)), start, end, Date.now(), Date.now(), admin, JSON.stringify(cleanSections(body.sections)), cleanTripDays(body.trip_days))
       .run();
     return json({ id, admin }, 201);
   }
@@ -289,14 +304,20 @@ async function handleApi(request, env, url) {
     return json({ event, responses, host: isHost(request, event) });
   }
 
-  // PATCH /api/events/:id  { sections?, final? } — host only: turn Places / Activities on or off, and
-  // decide the final date(s) everyone sees ({ dates: [...] }, or null to undo)
+  // PATCH /api/events/:id
+  //   { sections?, trip_days? } — host only: Places / Activities on or off, how long the trip is
+  //   { final, by }             — anyone: save the decided date(s) ({ dates: [...] }) or unsave (null); logged
   if (parts.length === 2 && method === "PATCH") {
     const event = await getEvent(env, eventId);
     if (!event) return fail("This event doesn’t exist or has been removed.", 404);
-    if (!isHost(request, event)) return fail("Only the person who created this event can change it.", 403);
     const body = await readBody(request);
     const out = {};
+    if (body && ("sections" in body || "trip_days" in body) && !isHost(request, event))
+      return fail("Only the person who created this event can change its settings.", 403);
+    if (body && "trip_days" in body) {
+      out.trip_days = cleanTripDays(body.trip_days);
+      await env.DB.prepare("UPDATE events SET trip_days = ? WHERE id = ?").bind(out.trip_days, eventId).run();
+    }
     if (body && "sections" in body) {
       out.sections = cleanSections(body.sections);
       await env.DB.prepare("UPDATE events SET sections = ? WHERE id = ?").bind(JSON.stringify(out.sections), eventId).run();
@@ -306,17 +327,20 @@ async function handleApi(request, env, url) {
       if (body.final && !dates.length) return fail("Pick at least one date inside the event’s range.");
       out.final = dates.length ? { dates } : null;
       await env.DB.prepare("UPDATE events SET final = ? WHERE id = ?").bind(out.final ? JSON.stringify(out.final) : null, eventId).run();
+      out.log = await addLog(env, event, out.final ? { action: "final", by: body.by, dates } : { action: "unfinal", by: body.by, dates: event.final?.dates || [] });
     }
     return json(out);
   }
 
-  // DELETE /api/events/:id/responses/:rid — host only: remove someone's entry
+  // DELETE /api/events/:id/responses/:rid?by=Name — anyone can remove an entry; it goes in the change log
   if (parts.length === 4 && parts[2] === "responses" && method === "DELETE") {
     const event = await getEvent(env, eventId);
     if (!event) return fail("This event doesn’t exist or has been removed.", 404);
-    if (!isHost(request, event)) return fail("Only the person who created this event can remove entries.", 403);
+    const row = await env.DB.prepare("SELECT name FROM responses WHERE id = ? AND event_id = ?").bind(parts[3], eventId).first();
+    if (!row) return fail("That response was already removed.", 404);
     await env.DB.prepare("DELETE FROM responses WHERE id = ? AND event_id = ?").bind(parts[3], eventId).run();
-    return json({ ok: true });
+    const log = await addLog(env, event, { action: "delete", by: url.searchParams.get("by"), who: row.name });
+    return json({ ok: true, log });
   }
 
   // POST /api/events/:id/responses
@@ -379,7 +403,7 @@ function ensureSchema(env) {
   ])
     .then(async () => {
       // databases created by older versions: add the newer columns (fails harmlessly if present)
-      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"]]) {
+      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"], ["trip_days", "INTEGER"], ["log", "TEXT"]]) {
         await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} ${type}`).run().catch(() => {});
       }
     })

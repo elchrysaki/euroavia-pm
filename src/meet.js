@@ -33,6 +33,19 @@ export async function freePin(env) {
   return randomId(10); // practically never: fall back to a long id
 }
 
+/** Adds one line to a meeting's change log (the latest 40). */
+async function addLog(env, m, entry) {
+  let log = [];
+  try {
+    log = m.log ? JSON.parse(m.log) : [];
+  } catch {
+    log = [];
+  }
+  log = [{ at: Date.now(), ...entry, by: clean(entry.by, 40) || "Someone" }, ...log].slice(0, 40);
+  await env.DB.prepare("UPDATE meetings SET log = ? WHERE id = ?").bind(JSON.stringify(log), m.id).run();
+  return log;
+}
+
 /** The creator's browser keeps the admin token that lets it remove entries. */
 const isHost = (request, m) => {
   const t = request.headers.get("x-wingman-admin") || "";
@@ -94,6 +107,7 @@ export function ensureMeetSchema(env) {
           "ALTER TABLE meet_people ADD COLUMN maybe TEXT",
           "ALTER TABLE meetings ADD COLUMN admin_token TEXT",
           "ALTER TABLE meetings ADD COLUMN final TEXT",
+          "ALTER TABLE meetings ADD COLUMN log TEXT",
         ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
       ),
     )
@@ -130,6 +144,13 @@ const publicMeeting = (m) => ({
   title: m.title,
   description: m.description || "",
   creator: m.creator || "",
+  log: (() => {
+    try {
+      return m.log ? JSON.parse(m.log) : [];
+    } catch {
+      return [];
+    }
+  })(),
   final: (() => {
     try {
       return m.final ? JSON.parse(m.final) : null; // { start, end } in UTC epoch minutes
@@ -277,12 +298,11 @@ export async function handleMeetings(request, env, parts) {
     return json({ ok: true, count: slots.length });
   }
 
-  // PATCH /api/meetings/:id  { final: { start, end } | null } — the creator decides the final time
-  // (UTC epoch minutes, on the meeting's own slots), or undoes it
+  // PATCH /api/meetings/:id  { final: { start, end } | null, by } — anyone saves the decided time
+  // (UTC epoch minutes, on the meeting's own slots) or unsaves it; it goes in the change log
   if (parts.length === 2 && method === "PATCH") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
-    if (!isHost(request, m)) return fail("Only the person who created this meeting can decide the time.", 403);
     if (m.kind !== "dates") return fail("Only meetings on specific dates can have a final time.");
     const b = await readJson(request);
     let final = null;
@@ -295,16 +315,25 @@ export async function handleMeetings(request, env, parts) {
       final = { start, end };
     }
     await env.DB.prepare("UPDATE meetings SET final = ? WHERE id = ?").bind(final ? JSON.stringify(final) : null, mid).run();
-    return json({ final });
+    let before = null;
+    try {
+      before = m.final ? JSON.parse(m.final) : null;
+    } catch {
+      before = null;
+    }
+    const log = await addLog(env, m, final ? { action: "final", by: b?.by, start: final.start, end: final.end } : { action: "unfinal", by: b?.by, start: before?.start, end: before?.end });
+    return json({ final, log });
   }
 
-  // DELETE /api/meetings/:id/people/:pid — the creator only: remove someone's entry
+  // DELETE /api/meetings/:id/people/:pid?by=Name — anyone can remove an entry; it goes in the change log
   if (parts.length === 4 && parts[2] === "people" && method === "DELETE") {
     const m = await loadMeeting(env, mid);
     if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
-    if (!isHost(request, m)) return fail("Only the person who created this meeting can remove entries.", 403);
+    const row = await env.DB.prepare("SELECT name FROM meet_people WHERE id = ? AND meeting_id = ?").bind(parts[3], mid).first();
+    if (!row) return fail("That entry was already removed.", 404);
     await env.DB.prepare("DELETE FROM meet_people WHERE id = ? AND meeting_id = ?").bind(parts[3], mid).run();
-    return json({ ok: true });
+    const log = await addLog(env, m, { action: "delete", by: new URL(request.url).searchParams.get("by"), who: row.name });
+    return json({ ok: true, log });
   }
 
   return fail("Not found.", 404);

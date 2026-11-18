@@ -322,6 +322,47 @@ function googleCalUrl(it) {
   const q = new URLSearchParams({ action: "TEMPLATE", text: it.title, dates, details: [it.details, it.url].filter(Boolean).join("\n\n") });
   return `https://calendar.google.com/calendar/render?${q}`;
 }
+function outlookUrl(it, host = "outlook.live.com") {
+  const q = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: it.title, body: [it.details, it.url].filter(Boolean).join("\n\n") });
+  if (it.allDay) {
+    q.set("startdt", it.allDay.start);
+    q.set("enddt", addDays(it.allDay.end, 1));
+    q.set("allday", "true");
+  } else {
+    q.set("startdt", it.start.toISOString());
+    q.set("enddt", it.end.toISOString());
+  }
+  return `https://${host}/calendar/0/action/compose?${q}`;
+}
+/** "Add to calendar": one button, then pick Google, Apple, Microsoft Outlook (personal or work) or a file. */
+function openAddToCalendar(filename, items) {
+  const many = items.length > 1;
+  const note = many ? `<p class="sheet-sub cal-note">These dates are in ${items.length} separate blocks. Apple Calendar and the file add all of them; Google and Outlook open one block at a time.</p>` : "";
+  const per = (fn) =>
+    many
+      ? items.map((it) => `<a class="cal-sub" href="${esc(fn(it))}" target="_blank" rel="noopener noreferrer">${esc(fmtRunLong(it.allDay))}</a>`).join("")
+      : "";
+  openSheet(`
+    <div class="sheet-head"><div><h2>Add to calendar</h2><div class="sheet-sub">${esc(filename)}</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    ${note}
+    <div class="cal-menu">
+      <a class="cal-opt" ${many ? "" : `href="${esc(googleCalUrl(items[0]))}" target="_blank" rel="noopener noreferrer"`} data-cal="google">
+        <span class="cal-ico g">G</span><span><b>Google Calendar</b><small>Opens Google Calendar with it filled in</small></span></a>
+      ${per(googleCalUrl)}
+      <button type="button" class="cal-opt" data-cal="apple"><span class="cal-ico a">${icon("calendar")}</span><span><b>Apple Calendar</b><small>iPhone, iPad and Mac</small></span></button>
+      <a class="cal-opt" ${many ? "" : `href="${esc(outlookUrl(items[0]))}" target="_blank" rel="noopener noreferrer"`} data-cal="outlook">
+        <span class="cal-ico o">O</span><span><b>Microsoft Outlook</b><small>Outlook.com, Hotmail, Live</small></span></a>
+      ${per((it) => outlookUrl(it))}
+      <a class="cal-opt" ${many ? "" : `href="${esc(outlookUrl(items[0], "outlook.office.com"))}" target="_blank" rel="noopener noreferrer"`} data-cal="m365">
+        <span class="cal-ico o">O</span><span><b>Outlook for work or school</b><small>Microsoft 365</small></span></a>
+      ${per((it) => outlookUrl(it, "outlook.office.com"))}
+      <button type="button" class="cal-opt" data-cal="ics"><span class="cal-ico f">${icon("arrow")}</span><span><b>Download a calendar file</b><small>.ics — works with any calendar app</small></span></button>
+    </div>`);
+  const wrap = $(".sheet-wrap");
+  // Apple Calendar opens .ics files directly (iPhone / Mac); the file option is the same for other apps
+  $$('[data-cal="apple"], [data-cal="ics"]', wrap).forEach((b) => b.addEventListener("click", () => downloadIcs(filename, items)));
+  if (many) $$('a.cal-opt', wrap).forEach((a) => a.addEventListener("click", (e) => (e.preventDefault(), a.nextElementSibling?.focus())));
+}
 /** Consecutive dates grouped into runs: ["2027-04-10","2027-04-11","2027-04-14"] → [{start,end},{start,end}] */
 function dateRuns(dates) {
   const runs = [];
@@ -1004,7 +1045,7 @@ let meetPromise = null;
 function meetModule() {
   app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   meetPromise ||= import("/meet.js?v=" + ((document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1] || "1")).then((m) => {
-    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet, downloadIcs, googleCalUrl });
+    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet, downloadIcs, googleCalUrl, openAddToCalendar, actorName, changeLogHtml, ago });
     return m;
   });
   return meetPromise.catch((err) => {
@@ -1317,6 +1358,15 @@ function renderHome() {
             <button type="button" class="btn btn-tinted" data-whole="${nextYear}">All of ${nextYear}</button>
           </div>
           <p class="range-summary" id="rangeSummary"></p>
+          <div class="section-header">How long is the trip?</div>
+          <div class="segmented trip-len" role="group" aria-label="Trip length" data-seg="len">
+            <span class="thumb"></span>
+            <button type="button" data-value="1" aria-pressed="true">1 day</button>
+            <button type="button" data-value="2" aria-pressed="false">2 days</button>
+            <button type="button" data-value="3" aria-pressed="false">3 days</button>
+            <button type="button" data-value="7" aria-pressed="false">1 week</button>
+          </div>
+          <p class="len-hint">Wingman then looks for the best days in a row, not just the best single day. You can change it later.</p>
           <div class="section-header">Also ask about</div>
           <div class="group well toggles">
             <label class="row toggle-row"><span><b>Places</b><small>Everyone suggests places and votes</small></span><input type="checkbox" name="secPlaces" role="switch" checked /></label>
@@ -1346,6 +1396,8 @@ function renderHome() {
 
   const form = $("#createForm");
   const summary = $("#rangeSummary");
+  let tripDays = 1;
+  setupSegmented($('[data-seg="len"]'), (v) => (tripDays = Number(v)));
   // An Apple-style range calendar (like Calendar / Booking pickers): one month at a time; tap the first
   // day, then the last. The range is one continuous band between two filled circles. The presets
   // (3 / 6 months, 1 year) fill it in; any tap on the calendar makes it Custom.
@@ -1506,6 +1558,7 @@ function renderHome() {
           start_date: range.start,
           end_date: range.end,
           sections: { places: form.secPlaces.checked, activities: form.secActivities.checked },
+          trip_days: tripDays,
         },
       });
       if (admin) store.set(`wingman:admin:${id}`, admin);
@@ -1680,7 +1733,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
                   .map(
                     (r) =>
                       `<div class="person-row"><button type="button" class="person" data-filter="${esc(r.id)}" aria-pressed="false">${avatar(r.name, "sm")}<span>${esc(r.name)}</span></button>${
-                        host ? `<button type="button" class="person-remove" data-remove-resp="${esc(r.id)}" aria-label="Remove ${esc(r.name)}’s entry">${icon("x")}</button>` : ""
+                        `<button type="button" class="person-remove" data-remove-resp="${esc(r.id)}" aria-label="Remove ${esc(r.name)}’s entry">${icon("x")}</button>`
                       }</div>`,
                   )
                   .join("")}</div></div>`
@@ -1689,14 +1742,17 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
           ${expiryNotice(event)}
         </div>
         <div class="event-cta fade-in d1">${ctaHtml}</div>
+        ${changeLogHtml(event.log || [])}
         ${
           host
             ? `<div class="card host-card">
           <h3>Host settings</h3>
-          <p>Only you see this. Choose what people are asked about.</p>
+          <p>Only you see this. Choose how long the trip is and what people are asked about.</p>
+          <label class="host-len"><span><b>How long is the trip?</b><small>The best-dates search looks for this many days in a row</small></span>
+            <select data-trip-days>${TRIP_LENGTHS.map(([v, l]) => `<option value="${v}" ${v === (event.trip_days || 1) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
           <label class="toggle-row"><span><b>Places</b><small>Suggest and vote on places</small></span><input type="checkbox" role="switch" data-section="places" ${sec.places ? "checked" : ""} /></label>
           <label class="toggle-row"><span><b>Activities</b><small>Ideas with links and likes</small></span><input type="checkbox" role="switch" data-section="activities" ${sec.activities ? "checked" : ""} /></label>
-          <p class="host-note">Remove someone’s entry with the × next to their name.</p>
+
         </div>`
             : ""
         }
@@ -1714,9 +1770,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
       </section>
     </div>
     <div class="action-bar" id="actionBar">${ctaHtml}</div>
-    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button>${
-      host ? '<button class="btn btn-tinted" id="selFinal">Make final</button>' : ""
-    }<button class="btn btn-primary" id="selShow">Who’s free?</button></div>
+    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button><button class="btn btn-tinted" id="selFinal">Save dates</button><button class="btn btn-primary" id="selShow">Who’s free?</button></div>
   `;
 
   $$('[data-act="add"]').forEach((b) => b.addEventListener("click", () => openFlow()));
@@ -1727,13 +1781,15 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
       exitSelectMode();
       renderTab();
     });
-  // host: remove an entry
+  // anyone can remove an entry; it goes in the change log
   $$("[data-remove-resp]").forEach((b) =>
     b.addEventListener("click", async () => {
       const r = current.responses.find((x) => x.id === b.dataset.removeResp);
-      if (!r || !confirm(`Remove ${r.name}’s entry? This can’t be undone.`)) return;
+      if (!r || !confirm(`Remove ${r.name}’s entry? This can’t be undone, and it shows in the change log.`)) return;
+      const by = await actorName();
+      if (!by) return;
       try {
-        await api(`/events/${event.id}/responses/${r.id}`, { method: "DELETE" });
+        await api(`/events/${event.id}/responses/${r.id}?by=${encodeURIComponent(by)}`, { method: "DELETE" });
         if (current.filter === r.id) current.filter = null;
         toast(`${r.name}’s entry was removed`);
         await renderEvent(event.id, { keepTab: true, quiet: true });
@@ -1742,6 +1798,17 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
       }
     }),
   );
+  // host: how long the trip is
+  $("[data-trip-days]")?.addEventListener("change", async (e) => {
+    try {
+      await api(`/events/${event.id}`, { method: "PATCH", body: { trip_days: Number(e.target.value) } });
+      toast(`Now looking for the best ${e.target.selectedOptions[0].textContent.replace(/^1 /, "")}`);
+      current.moreBest = false;
+      await renderEvent(event.id, { keepTab: true, quiet: true });
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
   // host: turn Places / Activities on or off
   $$("[data-section]").forEach((box) =>
     box.addEventListener("change", async () => {
@@ -1774,7 +1841,7 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
     }),
   );
   $("#selClear").onclick = exitSelectMode;
-  $("#selShow").onclick = () => current.selected.size && openDaySheet([...current.selected].sort());
+  $("#selShow").onclick = () => current.selected.size && (tripLen() > 1 ? openCompareSheet() : openDaySheet([...current.selected].sort()));
   if ($("#selFinal")) $("#selFinal").onclick = () => current.selected.size && setFinalDates([...current.selected].sort());
   bindFinalTrip(event);
   renderTab();
@@ -1797,11 +1864,8 @@ function calendarHtml() {
   let maxScore = 0;
   for (const s of days.values()) maxScore = Math.max(maxScore, scoreOf(s, n));
 
-  const best = [...days.entries()]
-    .filter(([d]) => d >= today)
-    .map(([d, s]) => ({ d, s, score: scoreOf(s, n) }))
-    .sort((a, b) => b.score - a.score || b.s.yes.length - a.s.yes.length || a.d.localeCompare(b.d))
-    .slice(0, 6);
+  const L = tripLen();
+  const best = bestWindows(L, 6);
 
   // LettuceMeet-style scale: one clearly different shade per number of people, pale -> deep
   const steps = n <= 6 ? n : 5;
@@ -1832,29 +1896,31 @@ function calendarHtml() {
   }
 
   const top = best[0];
+  const lenWord = L === 1 ? "date" : L === 7 ? "week" : `${L} days`;
+  const when = (w) => (L === 1 ? fmtDate(w.start, { weekday: "long", day: "numeric", month: "long" }) : fmtRunLong({ start: w.start, end: w.end }));
   return `
     ${
       top
         ? `<div class="card verdict${current.moreBest ? " open" : ""}">
-        <div class="verdict-label">${icon("plane")} Best date so far</div>
+        <div class="verdict-label">${icon("plane")} Best ${lenWord} so far</div>
         <button type="button" class="verdict-toggle" id="moreBest" aria-expanded="${!!current.moreBest}" aria-controls="bestList" ${best.length > 1 ? "" : "disabled"}>
-          <span class="verdict-date">${esc(fmtDate(top.d, { weekday: "long", day: "numeric", month: "long" }))}</span>
+          <span class="verdict-date">${esc(when(top))}</span>
           ${best.length > 1 ? `<span class="verdict-chev" aria-hidden="true">${CHEVRON}</span>` : ""}
         </button>
-        <div class="verdict-sub"><b>${top.s.yes.length + top.s.maybe.length} of ${n}</b> can make it · ${top.s.yes.length} definitely</div>
+        <div class="verdict-sub"><b>${top.yes + top.maybe} of ${n}</b> can make ${L === 1 ? "it" : `all ${L} days`} · ${top.yes} definitely</div>
         <div class="verdict-actions">
-          <button class="btn btn-tinted" data-best="${top.d}">See who’s in</button>
-          ${best.length > 1 ? `<button type="button" class="btn btn-plain" data-more-best>${current.moreBest ? "Fewer dates" : `More dates (${best.length - 1})`}</button>` : ""}
+          <button class="btn btn-tinted" data-best="${top.dates.join(",")}">See who’s in</button>
+          ${best.length > 1 ? `<button type="button" class="btn btn-plain" data-more-best>${current.moreBest ? "Fewer options" : `More options (${best.length - 1})`}</button>` : ""}
         </div>
         ${
           best.length > 1
             ? `<ol class="best-list" id="bestList" ${current.moreBest ? "" : "hidden"}>${best
                 .slice(1)
-                .map((b, i) => {
-                  const can = b.s.yes.length + b.s.maybe.length;
-                  return `<li><button type="button" class="best-row" data-best="${b.d}">
+                .map((w, i) => {
+                  const can = w.yes + w.maybe;
+                  return `<li><button type="button" class="best-row" data-best="${w.dates.join(",")}">
                     <span class="best-rank">${i + 2}</span>
-                    <span class="best-main"><b>${esc(fmtDate(b.d, { weekday: "long", day: "numeric", month: "long" }))}</b><span>${can} of ${n} can make it · ${b.s.yes.length} definitely</span></span>
+                    <span class="best-main"><b>${esc(when(w))}</b><span>${can} of ${n} can make ${L === 1 ? "it" : "all of it"} · ${w.yes} definitely</span></span>
                     <span class="best-bar" aria-hidden="true"><i style="width:${Math.round((can / n) * 100)}%"></i></span>
                   </button></li>`;
                 })
@@ -1862,11 +1928,14 @@ function calendarHtml() {
             : ""
         }
       </div>`
-        : ""
+        : `<div class="card verdict none">
+        <div class="verdict-label">${icon("plane")} Best ${lenWord} so far</div>
+        <p class="verdict-sub">Nobody can make ${L === 7 ? "a whole week" : `${L} days in a row`} yet. Ask people to add more days${current.host ? ", or pick a shorter trip in Host settings" : ""}. You can still tap any day to see who’s free.</p>
+      </div>`
     }
     <div class="cal-toolbar">
       <div class="legend"><span>0/${n}</span><span class="legend-scale">${legend}</span><span>${n}/${n} available</span></div>
-      <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} Compare dates</button>
+      <button class="btn btn-tinted" id="selectToggle">${icon("grid").replace("<svg", '<svg width="16" height="16"')} ${L === 1 ? "Compare dates" : `Compare ${lenWord}`}</button>
     </div>
     ${monthsHtml(eventRange(event), (date) => {
       const s = days.get(date);
@@ -1886,7 +1955,7 @@ function bindCalendar() {
   const body = $("#tabBody");
   body.addEventListener("click", (e) => {
     const best = e.target.closest("[data-best]");
-    if (best) return openDaySheet([best.dataset.best]);
+    if (best) return openDaySheet(best.dataset.best.split(","));
     if (e.target.closest("[data-goto-places]")) {
       $('[data-seg="tabs"] [data-value="destinations"]')?.click();
       setTimeout(() => $('[data-form="place"] input')?.focus(), 50);
@@ -1913,21 +1982,106 @@ function bindCalendar() {
     const cell = e.target.closest(".day[data-date]");
     if (!cell) return;
     const date = cell.dataset.date;
+    const L = tripLen();
     if (current.selectMode) {
+      // with a trip length, a tap picks the whole stretch that starts on that day
       current.selected.has(date) ? current.selected.delete(date) : current.selected.add(date);
-      cell.classList.toggle("selected", current.selected.has(date));
+      paintSelection();
       updateSelectBar();
     } else {
-      openDaySheet([date]);
+      openDaySheet(windowFrom(date, L), { single: L > 1 ? date : null });
     }
   });
+}
+
+/* ---- Trip length: the best-dates search looks for this many days in a row ---- */
+const tripLen = () => Math.max(1, Math.min(14, Number(current?.event?.trip_days) || 1));
+/** The L days starting at date, cut at the end of the event's range. */
+function windowFrom(date, L) {
+  const end = eventRange(current.event).end;
+  const out = [];
+  for (let i = 0, d = date; i < L && d <= end; i++, d = addDays(d, 1)) out.push(d);
+  return out;
+}
+/** Who can make every day of these dates: definitely (all yes), maybe (yes or maybe on all), can't. */
+function whoCanMake(dates) {
+  let yes = 0;
+  let maybe = 0;
+  for (const r of current.responses) {
+    const ys = new Set(r.yes);
+    const ms = new Set(r.maybe);
+    if (dates.every((d) => ys.has(d))) yes += 1;
+    else if (dates.every((d) => ys.has(d) || ms.has(d))) maybe += 1;
+  }
+  return { yes, maybe };
+}
+/** The best stretches of L days in a row (not overlapping), best first. */
+function bestWindows(L, limit = 6) {
+  const { event, agg } = current;
+  const n = agg.n;
+  if (!n) return [];
+  const range = eventRange(event);
+  const today = todayStr();
+  const out = [];
+  for (let d = range.start > today ? range.start : today; addDays(d, L - 1) <= range.end; d = addDays(d, 1)) {
+    const dates = windowFrom(d, L);
+    const c = whoCanMake(dates);
+    if (!c.yes && !c.maybe) continue;
+    out.push({ start: d, end: dates[dates.length - 1], dates, ...c, score: c.yes + c.maybe * 0.5 });
+  }
+  out.sort((a, b) => b.score - a.score || b.yes - a.yes || a.start.localeCompare(b.start));
+  const picked = [];
+  for (const w of out) {
+    if (picked.some((p) => !(w.end < p.start || w.start > p.end))) continue; // no overlapping options
+    picked.push(w);
+    if (picked.length >= limit) break;
+  }
+  return picked;
+}
+/** Compare mode: highlight what's picked (whole stretches when the trip is longer than a day). */
+function paintSelection() {
+  const L = tripLen();
+  const on = new Set();
+  for (const d of current.selected) for (const x of windowFrom(d, L)) on.add(x);
+  $$("#tabBody .day[data-date]").forEach((el) => el.classList.toggle("selected", on.has(el.dataset.date)));
+}
+/** Compare several stretches side by side. */
+function openCompareSheet() {
+  const L = tripLen();
+  const n = current.responses.length;
+  const rows = [...current.selected]
+    .sort()
+    .map((d) => {
+      const dates = windowFrom(d, L);
+      return { dates, ...whoCanMake(dates) };
+    })
+    .sort((a, b) => b.yes + b.maybe * 0.5 - (a.yes + a.maybe * 0.5));
+  openSheet(`
+    <div class="sheet-head"><div><h2>Compare ${L === 7 ? "weeks" : `${L}-day options`}</h2><div class="sheet-sub">Who can make every day of each option</div></div><button class="btn btn-icon" data-close aria-label="Close">${icon("x")}</button></div>
+    <div class="cmp-list">${rows
+      .map(
+        (r, i) => `<div class="cmp-row${i === 0 ? " top" : ""}">
+          <div class="cmp-main"><b>${esc(fmtRunLong({ start: r.dates[0], end: r.dates[r.dates.length - 1] }))}</b>
+          <span><b>${r.yes + r.maybe} of ${n}</b> can make it · ${r.yes} definitely · ${r.maybe} maybe</span>
+          <span class="best-bar" aria-hidden="true"><i style="width:${n ? Math.round(((r.yes + r.maybe) / n) * 100) : 0}%"></i></span></div>
+          <div class="cmp-actions"><button type="button" class="btn btn-tinted" data-cmp-who="${r.dates.join(",")}">Who</button><button type="button" class="btn btn-primary" data-cmp-final="${r.dates.join(",")}">Save these dates</button></div>
+        </div>`,
+      )
+      .join("")}</div>`);
+  $$("[data-cmp-who]").forEach((b) => b.addEventListener("click", () => openDaySheet(b.dataset.cmpWho.split(","))));
+  $$("[data-cmp-final]").forEach((b) =>
+    b.addEventListener("click", () => {
+      closeSheet();
+      setFinalDates(b.dataset.cmpFinal.split(","));
+    }),
+  );
 }
 
 function enterSelectMode() {
   current.selectMode = true;
   const t = $("#selectToggle");
   if (t) t.innerHTML = `${icon("x").replace("<svg", '<svg width="16" height="16"')} Done`;
-  toast("Tap the days you want to compare");
+  toast(tripLen() > 1 ? `Tap the first day of each ${tripLen() === 7 ? "week" : `${tripLen()}-day option`} to compare` : "Tap the days you want to compare");
   updateSelectBar();
 }
 function exitSelectMode() {
@@ -1943,12 +2097,15 @@ function updateSelectBar() {
   const bar = $("#selectBar");
   if (!bar) return;
   const n = current.selected.size;
-  $("#selCount").textContent = `${n} ${n === 1 ? "day" : "days"}`;
+  const L = tripLen();
+  $("#selCount").textContent = L > 1 ? `${n} ${n === 1 ? "option" : "options"}` : `${n} ${n === 1 ? "day" : "days"}`;
+  if ($("#selShow")) $("#selShow").textContent = L > 1 ? "Compare" : "Who’s free?";
+  if ($("#selFinal")) $("#selFinal").hidden = L > 1;
   bar.classList.toggle("show", current.selectMode && n > 0);
   document.body.classList.toggle("selecting", current.selectMode);
 }
 
-function openDaySheet(dates) {
+function openDaySheet(dates, { single = null } = {}) {
   const { responses } = current;
   const yes = [];
   const maybe = [];
@@ -1960,14 +2117,19 @@ function openDaySheet(dates) {
     else if (dates.every((d) => ys.has(d) || ms.has(d))) maybe.push(r.name);
     else no.push(r.name);
   }
+  const contiguous = dates.length > 1 && dateRuns(dates).length === 1;
   const title =
     dates.length === 1
       ? fmtDate(dates[0], { weekday: "long", month: "long", day: "numeric" })
-      : `${dates.length} days selected`;
+      : contiguous
+        ? fmtRunLong({ start: dates[0], end: dates[dates.length - 1] })
+        : `${dates.length} days selected`;
   const sub =
     dates.length === 1
       ? dates[0].slice(0, 4)
-      : `${fmtDate(dates[0], { month: "short", day: "numeric" })} – ${fmtDate(dates[dates.length - 1], { month: "short", day: "numeric" })} · counts people free on all of them`;
+      : contiguous
+        ? `${dates.length} days in a row · counts people free on all of them`
+        : `${fmtDate(dates[0], { month: "short", day: "numeric" })} – ${fmtDate(dates[dates.length - 1], { month: "short", day: "numeric" })} · counts people free on all of them`;
 
   const section = (label, names, sw) =>
     names.length
@@ -1988,17 +2150,49 @@ function openDaySheet(dates) {
       ${responses.length ? "" : '<p class="sheet-sub">No responses yet.</p>'}
     </div>
     ${
-      current.host
-        ? `<div class="sheet-final"><button type="button" class="btn btn-primary btn-block" id="sheetFinal">${icon("check")} ${
-            dates.length === 1 ? "Make this the final date" : "Make these the final dates"
-          }</button><p class="sheet-sub">Only you can do this. Everyone who opens the event sees it, and can add it to their calendar.</p></div>`
-        : ""
+      `<div class="sheet-final"><button type="button" class="btn btn-primary btn-block" id="sheetFinal">${icon("check")} ${
+        dates.length === 1 ? "Save this date" : "Save these dates"
+      }</button>${
+        single ? `<button type="button" class="btn btn-plain btn-block" id="sheetSingle">Just ${esc(fmtDate(single, { weekday: "short", day: "numeric", month: "short" }))}</button>` : ""
+      }<p class="sheet-sub">Everyone who opens the event sees the saved dates and can add them to their calendar. Anyone can unsave them; it shows in the change log.</p></div>`
     }
   `);
   $("#sheetFinal")?.addEventListener("click", () => {
     closeSheet();
     setFinalDates(dates);
   });
+  $("#sheetSingle")?.addEventListener("click", () => {
+    closeSheet();
+    setTimeout(() => openDaySheet([single]), 260);
+  });
+}
+
+const TRIP_LENGTHS = [
+  [1, "1 day"],
+  [2, "2 days"],
+  [3, "3 days"],
+  [4, "4 days"],
+  [5, "5 days"],
+  [7, "1 week"],
+  [10, "10 days"],
+  [14, "2 weeks"],
+];
+
+/** The change log: who removed whose entry, who saved or unsaved the dates. */
+function changeLogHtml(log, fmtWhat = (e) => (e.dates?.length ? dateRuns(e.dates).map(fmtRunLong).join(", ") : "")) {
+  if (!log.length) return "";
+  const line = (e) => {
+    const who = `<b>${esc(e.by)}</b>`;
+    if (e.action === "delete") return `${who} removed <b>${esc(e.who)}</b>’s entry`;
+    if (e.action === "final") return `${who} saved ${esc(fmtWhat(e))}`;
+    if (e.action === "unfinal") return `${who} unsaved ${esc(fmtWhat(e) || "the date")}`;
+    return who;
+  };
+  const items = log.slice(0, 20);
+  return `<details class="card changelog"${items.length <= 3 ? " open" : ""}>
+    <summary><span>Change log</span><small>${log.length} ${log.length === 1 ? "change" : "changes"}</small></summary>
+    <ul>${items.map((e) => `<li><span>${line(e)}</span><time datetime="${new Date(e.at).toISOString()}">${esc(ago(e.at))}</time></li>`).join("")}</ul>
+  </details>`;
 }
 
 /* ---- The decided date(s) ---- */
@@ -2022,8 +2216,7 @@ function finalTripHtml(event, host) {
     <div class="final-sub">${n} ${n === 1 ? "day" : "days"} · ${all} definitely${some ? ` · ${some} maybe` : ""}</div>
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
-      <a class="btn btn-tinted" data-final-google target="_blank" rel="noopener noreferrer">Google Calendar</a>
-      ${host ? '<button type="button" class="btn btn-plain" data-final-clear>Undo final</button>' : ""}
+      <button type="button" class="btn btn-plain" data-final-clear>Unsave these dates</button>
     </div>
   </div>`;
 }
@@ -2035,15 +2228,14 @@ function bindFinalTrip(event) {
   const card = $("#finalCard");
   if (!card) return;
   const items = tripCalItems(event);
-  const g = card.querySelector("[data-final-google]");
-  if (g) g.href = googleCalUrl(items[0]);
-  if (items.length > 1 && g) g.textContent = "Google Calendar (first days)";
-  card.querySelector("[data-final-ics]").addEventListener("click", () => downloadIcs(event.title, items));
+  card.querySelector("[data-final-ics]").addEventListener("click", () => openAddToCalendar(event.title, items));
   card.querySelector("[data-final-clear]")?.addEventListener("click", async () => {
-    if (!confirm("Undo the final date? Everyone will see the group’s calendar again.")) return;
+    if (!confirm("Unsave these dates? Everyone will see the group’s calendar again. This goes in the change log.")) return;
+    const by = await actorName();
+    if (!by) return;
     try {
-      await api(`/events/${event.id}`, { method: "PATCH", body: { final: null } });
-      toast("The final date was removed");
+      await api(`/events/${event.id}`, { method: "PATCH", body: { final: null, by } });
+      toast("The dates were unsaved");
       await renderEvent(event.id, { keepTab: true, quiet: true });
     } catch (err) {
       toast(err.message, { error: true });
@@ -2052,10 +2244,12 @@ function bindFinalTrip(event) {
 }
 async function setFinalDates(dates) {
   const event = current.event;
+  const by = await actorName();
+  if (!by) return;
   try {
-    await api(`/events/${event.id}`, { method: "PATCH", body: { final: { dates } } });
+    await api(`/events/${event.id}`, { method: "PATCH", body: { final: { dates }, by } });
     exitSelectMode();
-    toast(dates.length === 1 ? "Final date set — everyone can see it" : "Final dates set — everyone can see them");
+    toast(dates.length === 1 ? "Date saved — everyone can see it" : "Dates saved — everyone can see them");
     buzz([15, 60, 15]);
     await renderEvent(event.id, { keepTab: true, quiet: true });
     window.scrollTo({ top: 0, behavior: reducedMotion() ? "auto" : "smooth" });
@@ -2187,6 +2381,15 @@ function activitiesHtml() {
 }
 
 /** Asks for a name in a small sheet (first quick vote from this device). Resolves null if dismissed. */
+/** Your name for the change log: the one this device remembers, or asked once. */
+async function actorName() {
+  const known = store.get("convene:name", "");
+  if (known) return known;
+  const name = await askName();
+  if (name) store.set("convene:name", name);
+  return name;
+}
+
 function askName() {
   return new Promise((resolve) => {
     openSheet(

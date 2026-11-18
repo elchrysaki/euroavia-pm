@@ -605,13 +605,14 @@ function paintBody() {
                   .map(
                     (p) => `<li class="person-row"><button type="button" class="person${M.filter === p.id ? " on" : ""}" data-person="${esc(p.id)}" aria-pressed="${M.filter === p.id}">${avatar(p.name, "sm")}<span>${esc(p.name)}${
                       M.me && p.id === M.me.id ? ' <small>(you)</small>' : ""
-                    }</span></button>${M.host && !editing ? `<button type="button" class="person-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${esc(p.name)}’s entry">${icon("x")}</button>` : ""}</li>`,
+                    }</span></button>${!editing ? `<button type="button" class="person-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${esc(p.name)}’s entry">${icon("x")}</button>` : ""}</li>`,
                   )
                   .join("")}</ul><p class="mtg-side-note">Tap a name to see only their times.</p>`
               : `<p class="mtg-side-note">Be the first: add the times you can make.</p>`
           }
         </div>
         <div class="card mtg-who" id="who"></div>
+        ${K.changeLogHtml(M.meeting.log || [], (e) => (e.start ? fmtLogTime(e.start, e.end) : ""))}
       </aside>
     </div>`;
 
@@ -638,9 +639,12 @@ function paintBody() {
   body.querySelectorAll("[data-remove-person]").forEach((b) =>
     b.addEventListener("click", async () => {
       const p = M.people.find((x) => x.id === b.dataset.removePerson);
-      if (!p || !confirm(`Remove ${p.name}’s entry? This can’t be undone.`)) return;
+      if (!p || !confirm(`Remove ${p.name}’s entry? This can’t be undone, and it shows in the change log.`)) return;
+      const by = await K.actorName();
+      if (!by) return;
       try {
-        await K.api(`/meetings/${M.meeting.id}/people/${p.id}`, { method: "DELETE" });
+        const res = await K.api(`/meetings/${M.meeting.id}/people/${p.id}?by=${encodeURIComponent(by)}`, { method: "DELETE" });
+        if (res.log) M.meeting.log = res.log;
         M.people = M.people.filter((x) => x.id !== p.id);
         if (M.filter === p.id) M.filter = null;
         if (M.focus) M.focus = null;
@@ -923,11 +927,20 @@ function paintWho() {
     ${yes.length ? `<h4><span class="sw yes"></span>Available</h4><ul class="who-list">${list(yes)}</ul>` : ""}
     ${maybe.length ? `<h4><span class="sw maybe"></span>Maybe</h4><ul class="who-list">${list(maybe)}</ul>` : ""}
     ${no.length ? `<h4><span class="sw none"></span>Unavailable</h4><ul class="who-list dim">${list(no)}</ul>` : ""}
-    ${M.host && M.meeting.kind === "dates" ? `<button type="button" class="btn btn-tinted btn-block who-final" data-make-final="${esc(M.focus)}">Make this the final time</button>` : ""}`;
+    ${M.meeting.kind === "dates" ? `<button type="button" class="btn btn-tinted btn-block who-final" data-make-final="${esc(M.focus)}">Save this time</button>` : ""}`;
   el.querySelector("[data-make-final]")?.addEventListener("click", (e) => {
     const start = Number(keysOf(e.currentTarget.dataset.makeFinal)[0].slice(1));
     setFinal({ start, end: start + ROW });
   });
+}
+
+/** A logged time, in the viewer's time zone: "Fri, Nov 20, 10:00–10:30 AM". */
+function fmtLogTime(start, end) {
+  const a = new Date(start * 60000);
+  const b = new Date(end * 60000);
+  const day = a.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: M.tz });
+  const t = (d) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: M.tz });
+  return `${day}, ${t(a)}–${t(b)}`;
 }
 
 /* ---- The decided time: everyone sees it and can add it to their calendar (in their own time zone) ---- */
@@ -965,24 +978,26 @@ function finalHtml() {
     <div class="final-sub">Shown in ${esc(M.tz)} · ${yes} of ${M.people.length} available${maybe ? ` · ${maybe} maybe` : ""}</div>
     <div class="final-actions">
       <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
-      <a class="btn btn-tinted" href="${esc(K.googleCalUrl(it))}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
-      ${M.host ? '<button type="button" class="btn btn-plain" data-final-clear>Undo final</button>' : ""}
+      <button type="button" class="btn btn-plain" data-final-clear>Unsave this time</button>
     </div>
   </div>`;
 }
 function bindFinal() {
   const card = K.$("#mtgFinal");
   if (!card) return;
-  card.querySelector("[data-final-ics]").addEventListener("click", () => K.downloadIcs(M.meeting.title, [finalItem()]));
+  card.querySelector("[data-final-ics]").addEventListener("click", () => K.openAddToCalendar(M.meeting.title, [finalItem()]));
   card.querySelector("[data-final-clear]")?.addEventListener("click", () => {
-    if (confirm("Undo the final time? Everyone will see the group grid again.")) setFinal(null);
+    if (confirm("Unsave this time? Everyone will see the group grid again. This goes in the change log.")) setFinal(null);
   });
 }
 async function setFinal(final) {
+  const by = await K.actorName();
+  if (!by) return;
   try {
-    const res = await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { final } });
+    const res = await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { final, by } });
     M.meeting.final = res.final;
-    K.toast(final ? "Final time set — everyone can see it" : "The final time was removed");
+    if (res.log) M.meeting.log = res.log;
+    K.toast(final ? "Time saved — everyone can see it" : "The time was unsaved");
     K.buzz?.([15, 60, 15]);
     paintBody();
     if (final) window.scrollTo({ top: 0, behavior: K.reducedMotion?.() ? "auto" : "smooth" });
@@ -1022,7 +1037,7 @@ function paintBest(L) {
     <div><span class="best-label">Best time so far</span>
     <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b>
     <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} maybe` : ""}</span></div>
-    ${M.host && M.meeting.kind === "dates" ? '<button type="button" class="btn btn-tinted best-final" id="bestFinal">Make this final</button>' : ""}
+    ${M.meeting.kind === "dates" ? '<button type="button" class="btn btn-tinted best-final" id="bestFinal">Save this time</button>' : ""}
   </div>`;
   el.querySelector("#bestFinal")?.addEventListener("click", () => {
     const start = Number(keysOf(best.slot)[0].slice(1));
