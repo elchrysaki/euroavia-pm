@@ -178,7 +178,7 @@ const isHost = (request, event) => {
 /** Loads an event; deletes it if it has expired; records this visit (keeps it alive). */
 async function getEvent(env, id, { touch = true } = {}) {
   const row = await env.DB.prepare(
-    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections FROM events WHERE id = ?",
+    "SELECT id, title, description, year, start_date, end_date, created_at, last_seen, admin_token, sections, final FROM events WHERE id = ?",
   )
     .bind(id)
     .first();
@@ -195,6 +195,12 @@ async function getEvent(env, id, { touch = true } = {}) {
   }
   event.delete_at = deleteAt(event);
   event.sections = parseSections(event.sections);
+  // the host's final choice: { dates: ["YYYY-MM-DD", …] } or null
+  try {
+    event.final = event.final ? JSON.parse(event.final) : null;
+  } catch {
+    event.final = null;
+  }
   Object.defineProperty(event, "admin_token", { value: event.admin_token, enumerable: false }); // never sent to the page
   delete event.last_seen;
   return event;
@@ -283,15 +289,25 @@ async function handleApi(request, env, url) {
     return json({ event, responses, host: isHost(request, event) });
   }
 
-  // PATCH /api/events/:id  { sections } — host only: turn Places / Activities on or off
+  // PATCH /api/events/:id  { sections?, final? } — host only: turn Places / Activities on or off, and
+  // decide the final date(s) everyone sees ({ dates: [...] }, or null to undo)
   if (parts.length === 2 && method === "PATCH") {
     const event = await getEvent(env, eventId);
     if (!event) return fail("This event doesn’t exist or has been removed.", 404);
     if (!isHost(request, event)) return fail("Only the person who created this event can change it.", 403);
     const body = await readBody(request);
-    const sections = cleanSections(body?.sections);
-    await env.DB.prepare("UPDATE events SET sections = ? WHERE id = ?").bind(JSON.stringify(sections), eventId).run();
-    return json({ sections });
+    const out = {};
+    if (body && "sections" in body) {
+      out.sections = cleanSections(body.sections);
+      await env.DB.prepare("UPDATE events SET sections = ? WHERE id = ?").bind(JSON.stringify(out.sections), eventId).run();
+    }
+    if (body && "final" in body) {
+      const dates = body.final ? validDatesInRange(body.final.dates, event).slice(0, 60) : [];
+      if (body.final && !dates.length) return fail("Pick at least one date inside the event’s range.");
+      out.final = dates.length ? { dates } : null;
+      await env.DB.prepare("UPDATE events SET final = ? WHERE id = ?").bind(out.final ? JSON.stringify(out.final) : null, eventId).run();
+    }
+    return json(out);
   }
 
   // DELETE /api/events/:id/responses/:rid — host only: remove someone's entry
@@ -363,7 +379,7 @@ function ensureSchema(env) {
   ])
     .then(async () => {
       // databases created by older versions: add the newer columns (fails harmlessly if present)
-      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"]]) {
+      for (const [col, type] of [["start_date", "TEXT"], ["end_date", "TEXT"], ["last_seen", "INTEGER"], ["admin_token", "TEXT"], ["sections", "TEXT"], ["final", "TEXT"]]) {
         await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${col} ${type}`).run().catch(() => {});
       }
     })

@@ -570,6 +570,7 @@ function paintBody() {
   const meName = M.me?.name;
   const editing = M.editing;
   body.innerHTML = `
+    ${finalHtml()}
     <div id="mtgBest"></div>
     <div class="mtg-main">
       <section class="card mtg-grid-card">
@@ -615,6 +616,7 @@ function paintBody() {
     </div>`;
 
   $("#addAvail")?.addEventListener("click", startEditing);
+  bindFinal();
   $("#doneEdit")?.addEventListener("click", () => {
     M.editing = false;
     flushSave();
@@ -751,7 +753,8 @@ function paintGridOnly() {
         rows += `<div class="${cls} solo${st ? ` ${st}` : ""}" data-s="${slot}"></div>`;
       } else {
         const k = score(slot);
-        rows += `<div class="${cls} g${k ? " heat" : ""}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}"></div>`;
+        const fin = M.meeting.final && keysOf(slot).some((key) => { const v = Number(key.slice(1)); return v >= M.meeting.final.start && v < M.meeting.final.end; }) ? " final" : "";
+        rows += `<div class="${cls} g${k ? " heat" : ""}${fin}${M.focus === slot ? " focus" : ""}" style="--t:${n ? (k / n).toFixed(3) : 0}" data-s="${slot}"></div>`;
       }
     });
   });
@@ -919,7 +922,73 @@ function paintWho() {
     <div class="who-head"><b>${esc(describeSlot(M.focus))}</b><span>${yes.length} of ${n} available${maybe.length ? ` · ${maybe.length} maybe` : ""}</span></div>
     ${yes.length ? `<h4><span class="sw yes"></span>Available</h4><ul class="who-list">${list(yes)}</ul>` : ""}
     ${maybe.length ? `<h4><span class="sw maybe"></span>Maybe</h4><ul class="who-list">${list(maybe)}</ul>` : ""}
-    ${no.length ? `<h4><span class="sw none"></span>Unavailable</h4><ul class="who-list dim">${list(no)}</ul>` : ""}`;
+    ${no.length ? `<h4><span class="sw none"></span>Unavailable</h4><ul class="who-list dim">${list(no)}</ul>` : ""}
+    ${M.host && M.meeting.kind === "dates" ? `<button type="button" class="btn btn-tinted btn-block who-final" data-make-final="${esc(M.focus)}">Make this the final time</button>` : ""}`;
+  el.querySelector("[data-make-final]")?.addEventListener("click", (e) => {
+    const start = Number(keysOf(e.currentTarget.dataset.makeFinal)[0].slice(1));
+    setFinal({ start, end: start + ROW });
+  });
+}
+
+/* ---- The decided time: everyone sees it and can add it to their calendar (in their own time zone) ---- */
+function finalItem() {
+  const f = M.meeting.final;
+  if (!f) return null;
+  return {
+    title: M.meeting.title,
+    details: M.meeting.description || "Planned with Wingman",
+    url: `${location.origin}/m/${M.meeting.id}`,
+    start: new Date(f.start * 60000),
+    end: new Date(f.end * 60000),
+  };
+}
+function finalHtml() {
+  const { esc, icon } = K;
+  const it = finalItem();
+  if (!it) return "";
+  const day = it.start.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: M.tz });
+  const t = (d) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: M.tz });
+  let yes = 0;
+  let maybe = 0;
+  const keys = M.meeting.slots.filter((k) => {
+    const v = Number(k.slice(1));
+    return v >= M.meeting.final.start && v < M.meeting.final.end;
+  });
+  for (const p of M.people) {
+    const st = setsOf(p);
+    if (keys.length && keys.every((k) => st.yes.has(k))) yes += 1;
+    else if (keys.length && keys.every((k) => st.yes.has(k) || st.maybe.has(k))) maybe += 1;
+  }
+  return `<div class="card final-card" id="mtgFinal">
+    <div class="final-label">${icon("check")} It’s decided</div>
+    <div class="final-when"><span>${esc(day)}</span><span>${esc(t(it.start))}–${esc(t(it.end))}</span></div>
+    <div class="final-sub">Shown in ${esc(M.tz)} · ${yes} of ${M.people.length} available${maybe ? ` · ${maybe} maybe` : ""}</div>
+    <div class="final-actions">
+      <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
+      <a class="btn btn-tinted" href="${esc(K.googleCalUrl(it))}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+      ${M.host ? '<button type="button" class="btn btn-plain" data-final-clear>Undo final</button>' : ""}
+    </div>
+  </div>`;
+}
+function bindFinal() {
+  const card = K.$("#mtgFinal");
+  if (!card) return;
+  card.querySelector("[data-final-ics]").addEventListener("click", () => K.downloadIcs(M.meeting.title, [finalItem()]));
+  card.querySelector("[data-final-clear]")?.addEventListener("click", () => {
+    if (confirm("Undo the final time? Everyone will see the group grid again.")) setFinal(null);
+  });
+}
+async function setFinal(final) {
+  try {
+    const res = await K.api(`/meetings/${M.meeting.id}`, { method: "PATCH", body: { final } });
+    M.meeting.final = res.final;
+    K.toast(final ? "Final time set — everyone can see it" : "The final time was removed");
+    K.buzz?.([15, 60, 15]);
+    paintBody();
+    if (final) window.scrollTo({ top: 0, behavior: K.reducedMotion?.() ? "auto" : "smooth" });
+  } catch (err) {
+    K.toast(err.message, { error: true });
+  }
 }
 
 /** "Best time so far": the longest stretch where the most people are free (maybe counts half). */
@@ -953,5 +1022,10 @@ function paintBest(L) {
     <div><span class="best-label">Best time so far</span>
     <b>${esc(best.col.long)}, ${esc(timeLabel(best.start))}–${esc(timeLabel(best.end))}</b>
     <span class="best-sub">${yes} of ${n} available${best.k > yes ? ` · ${Math.round((best.k - yes) * 2)} maybe` : ""}</span></div>
+    ${M.host && M.meeting.kind === "dates" ? '<button type="button" class="btn btn-tinted best-final" id="bestFinal">Make this final</button>' : ""}
   </div>`;
+  el.querySelector("#bestFinal")?.addEventListener("click", () => {
+    const start = Number(keysOf(best.slot)[0].slice(1));
+    setFinal({ start, end: start + (best.end - best.start) });
+  });
 }

@@ -93,6 +93,7 @@ export function ensureMeetSchema(env) {
           "ALTER TABLE meetings ADD COLUMN step INTEGER",
           "ALTER TABLE meet_people ADD COLUMN maybe TEXT",
           "ALTER TABLE meetings ADD COLUMN admin_token TEXT",
+          "ALTER TABLE meetings ADD COLUMN final TEXT",
         ].map((q) => env.DB.prepare(q).run().catch(() => {})), // already there: fine
       ),
     )
@@ -129,6 +130,13 @@ const publicMeeting = (m) => ({
   title: m.title,
   description: m.description || "",
   creator: m.creator || "",
+  final: (() => {
+    try {
+      return m.final ? JSON.parse(m.final) : null; // { start, end } in UTC epoch minutes
+    } catch {
+      return null;
+    }
+  })(),
   step: m.step || 15,
   kind: m.kind,
   tz: m.tz,
@@ -267,6 +275,27 @@ export async function handleMeetings(request, env, parts) {
       .bind(JSON.stringify(slots), JSON.stringify(maybe), Date.now(), parts[3])
       .run();
     return json({ ok: true, count: slots.length });
+  }
+
+  // PATCH /api/meetings/:id  { final: { start, end } | null } — the creator decides the final time
+  // (UTC epoch minutes, on the meeting's own slots), or undoes it
+  if (parts.length === 2 && method === "PATCH") {
+    const m = await loadMeeting(env, mid);
+    if (!m) return fail("This meeting doesn’t exist or has been removed.", 404);
+    if (!isHost(request, m)) return fail("Only the person who created this meeting can decide the time.", 403);
+    if (m.kind !== "dates") return fail("Only meetings on specific dates can have a final time.");
+    const b = await readJson(request);
+    let final = null;
+    if (b?.final) {
+      const start = Number(b.final.start);
+      const end = Number(b.final.end);
+      const slots = new Set(JSON.parse(m.slots));
+      if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start || end - start > 24 * 60 || !slots.has(`t${start}`))
+        return fail("Pick a time inside this meeting.");
+      final = { start, end };
+    }
+    await env.DB.prepare("UPDATE meetings SET final = ? WHERE id = ?").bind(final ? JSON.stringify(final) : null, mid).run();
+    return json({ final });
   }
 
   // DELETE /api/meetings/:id/people/:pid — the creator only: remove someone's entry

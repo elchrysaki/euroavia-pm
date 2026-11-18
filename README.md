@@ -28,6 +28,8 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
 
 People can edit their own response later from the same device. The device keeps a private token for this. There are no accounts.
 
+**It's decided.** The host can make a day final (tap it, then **Make this the final date**) or several days (**Compare dates**, pick them, **Make final**). Meeting creators can make the best time final, or tap any time and **Make this the final time**. From then on, everyone who opens it (by link or PIN) sees an **It's decided** card at the top until the event is deleted, with **Add to calendar** (an .ics file for Apple Calendar, Outlook, Google…; trips as all-day dates, meetings as a timed event in UTC so every calendar shows it in its own time zone) and a **Google Calendar** link. The final days or time are outlined on the calendar or grid, and the host can **Undo final**.
+
 **The host** is whoever created the event, from that browser (it keeps a private admin key; the server checks it). The host can turn **Places** and **Activities** on or off (also when creating), and remove anyone's entry with the × next to their name. Meetings work the same way: their creator can remove entries. Events created before this have no host.
 
 ## Meeting times
@@ -166,6 +168,8 @@ The site lives at **https://wingman.euroavia.workers.dev** (Worker name `wingman
 | `GET` | `/api/meetings/:id` | → `{ meeting, people[] }` |
 | `POST` | `/api/meetings/:id/signin` | `{ name }` → `{ id, token, name, slots[], maybe[] }` |
 | `PUT` | `/api/meetings/:id/people/:pid` | `{ token, slots[], maybe[] }` |
+| `PATCH` | `/api/events/:id` (host) | `{ sections?, final?: { dates[] } \| null }` |
+| `PATCH` | `/api/meetings/:id` (creator) | `{ final: { start, end } \| null }` (UTC epoch minutes) |
 | `GET` | `/api/pin/:pin` | → `{ kind: "trip" \| "meet", id }` |
 
 New meetings use 30-minute slots (older ones keep 15). A date meeting stores each slot as an absolute instant (`t` + UTC epoch minutes), so every viewer can convert it to their own time zone. A weekday meeting stores `w<day>:<minute>`. There are no passwords: a name gets that person back.

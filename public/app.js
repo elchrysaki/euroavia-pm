@@ -288,6 +288,56 @@ function addMonths(dateStr, n) {
   return toStr(target);
 }
 const daysInRange = (a, b) => Math.round((parseDate(b) - parseDate(a)) / 86_400_000) + 1;
+/* ---- Add to calendar: an .ics file (Apple Calendar, Outlook, Google…) and a Google Calendar link ---- */
+const icsText = (v) => String(v || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+const icsUtc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+const icsDay = (date) => date.replace(/-/g, "");
+/**
+ * items: [{ title, details, url, allDay: { start, end } }] (dates, end inclusive)
+ *     or [{ title, details, url, start: Date, end: Date }] (a timed event)
+ */
+function downloadIcs(filename, items) {
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Wingman//Group planner//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+  items.forEach((it, i) => {
+    lines.push("BEGIN:VEVENT", `UID:${Date.now()}-${i}-${Math.random().toString(36).slice(2)}@wingman`, `DTSTAMP:${icsUtc(new Date())}`);
+    if (it.allDay) lines.push(`DTSTART;VALUE=DATE:${icsDay(it.allDay.start)}`, `DTEND;VALUE=DATE:${icsDay(addDays(it.allDay.end, 1))}`);
+    else lines.push(`DTSTART:${icsUtc(it.start)}`, `DTEND:${icsUtc(it.end)}`);
+    lines.push(`SUMMARY:${icsText(it.title)}`);
+    if (it.details) lines.push(`DESCRIPTION:${icsText(it.details)}`);
+    if (it.url) lines.push(`URL:${it.url}`);
+    lines.push("END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  const blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/calendar;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${filename.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "event"}.ics`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+function googleCalUrl(it) {
+  const dates = it.allDay ? `${icsDay(it.allDay.start)}/${icsDay(addDays(it.allDay.end, 1))}` : `${icsUtc(it.start)}/${icsUtc(it.end)}`;
+  const q = new URLSearchParams({ action: "TEMPLATE", text: it.title, dates, details: [it.details, it.url].filter(Boolean).join("\n\n") });
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
+/** Consecutive dates grouped into runs: ["2027-04-10","2027-04-11","2027-04-14"] → [{start,end},{start,end}] */
+function dateRuns(dates) {
+  const runs = [];
+  for (const d of [...dates].sort()) {
+    const last = runs[runs.length - 1];
+    if (last && addDays(last.end, 1) === d) last.end = d;
+    else runs.push({ start: d, end: d });
+  }
+  return runs;
+}
+const fmtRunLong = (r) => {
+  const a = fmtDate(r.start, { weekday: "short", day: "numeric", month: "short" });
+  if (r.start === r.end) return `${a}, ${r.start.slice(0, 4)}`;
+  return `${a} – ${fmtDate(r.end, { weekday: "short", day: "numeric", month: "short" })}, ${r.end.slice(0, 4)}`;
+};
+
 /** The date n days after dateStr. */
 function addDays(dateStr, n) {
   const d = parseDate(dateStr);
@@ -954,7 +1004,7 @@ let meetPromise = null;
 function meetModule() {
   app.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   meetPromise ||= import("/meet.js?v=" + ((document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1] || "1")).then((m) => {
-    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet });
+    m.init({ app, $, $$, esc, icon, api, toast, store, navActions, shareLink, setupSegmented, attachPainter, avatar, buzz, todayStr, parseDate, ymd, MONTHS, navigate, reducedMotion, pinText, markViewed, openSheet, closeSheet, downloadIcs, googleCalUrl });
     return m;
   });
   return meetPromise.catch((err) => {
@@ -1602,10 +1652,12 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   ];
   if (!tabs.some(([v]) => v === prevTab)) prevTab = current.tab = "calendar";
   const host = !!data.host;
+  current.host = host;
   const ctaHtml = myResponse
     ? `<button class="btn btn-secondary btn-block" data-act="edit">${icon("pencil")} Edit my response</button>`
     : `<button class="btn btn-primary btn-block" data-act="add">${icon("plus")} Add your availability</button>`;
   app.innerHTML = `
+    ${finalTripHtml(event, host)}
     <div class="event-layout">
       <aside class="event-aside">
         <div class="event-head pass-card fade-in">
@@ -1662,7 +1714,9 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
       </section>
     </div>
     <div class="action-bar" id="actionBar">${ctaHtml}</div>
-    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button><button class="btn btn-primary" id="selShow">Who’s free?</button></div>
+    <div class="select-bar" id="selectBar"><span id="selCount">0 days</span><button class="btn btn-plain" id="selClear">Clear</button>${
+      host ? '<button class="btn btn-tinted" id="selFinal">Make final</button>' : ""
+    }<button class="btn btn-primary" id="selShow">Who’s free?</button></div>
   `;
 
   $$('[data-act="add"]').forEach((b) => b.addEventListener("click", () => openFlow()));
@@ -1721,6 +1775,8 @@ function paintEvent(data, prevTab, { quiet = false } = {}) {
   );
   $("#selClear").onclick = exitSelectMode;
   $("#selShow").onclick = () => current.selected.size && openDaySheet([...current.selected].sort());
+  if ($("#selFinal")) $("#selFinal").onclick = () => current.selected.size && setFinalDates([...current.selected].sort());
+  bindFinalTrip(event);
   renderTab();
 }
 
@@ -1814,10 +1870,11 @@ function calendarHtml() {
     </div>
     ${monthsHtml(eventRange(event), (date) => {
       const s = days.get(date);
-      if (!s) return {};
+      const fin = event.final?.dates?.includes(date) ? " final" : "";
+      if (!s) return fin ? { cls: fin.trim(), label: "final date" } : {};
       const score = scoreOf(s, n); // yes = 1, maybe = 0.5, divided by everyone who responded
       return {
-        cls: `heat${score > 0.55 ? " strong" : ""}${score === maxScore && score > 0 ? " max" : ""}`,
+        cls: `heat${score > 0.55 ? " strong" : ""}${score === maxScore && score > 0 ? " max" : ""}${fin}`,
         style: `--t:${score.toFixed(3)}`,
         label: `${s.yes.length} yes, ${s.maybe.length} maybe of ${n}`,
       };
@@ -1930,7 +1987,81 @@ function openDaySheet(dates) {
       ${section("Can’t make it", no, "erase")}
       ${responses.length ? "" : '<p class="sheet-sub">No responses yet.</p>'}
     </div>
+    ${
+      current.host
+        ? `<div class="sheet-final"><button type="button" class="btn btn-primary btn-block" id="sheetFinal">${icon("check")} ${
+            dates.length === 1 ? "Make this the final date" : "Make these the final dates"
+          }</button><p class="sheet-sub">Only you can do this. Everyone who opens the event sees it, and can add it to their calendar.</p></div>`
+        : ""
+    }
   `);
+  $("#sheetFinal")?.addEventListener("click", () => {
+    closeSheet();
+    setFinalDates(dates);
+  });
+}
+
+/* ---- The decided date(s) ---- */
+function finalTripHtml(event, host) {
+  const f = event.final;
+  if (!f?.dates?.length) return "";
+  const runs = dateRuns(f.dates);
+  const n = f.dates.length;
+  // how many people said yes / maybe to every final day
+  let all = 0;
+  let some = 0;
+  for (const r of current.responses) {
+    const ys = new Set(r.yes);
+    const ms = new Set(r.maybe);
+    if (f.dates.every((d) => ys.has(d))) all += 1;
+    else if (f.dates.every((d) => ys.has(d) || ms.has(d))) some += 1;
+  }
+  return `<div class="card final-card" id="finalCard">
+    <div class="final-label">${icon("check")} It’s decided</div>
+    <div class="final-when">${runs.map((r) => `<span>${esc(fmtRunLong(r))}</span>`).join("")}</div>
+    <div class="final-sub">${n} ${n === 1 ? "day" : "days"} · ${all} definitely${some ? ` · ${some} maybe` : ""}</div>
+    <div class="final-actions">
+      <button type="button" class="btn btn-primary" data-final-ics>${icon("calendar")} Add to calendar</button>
+      <a class="btn btn-tinted" data-final-google target="_blank" rel="noopener noreferrer">Google Calendar</a>
+      ${host ? '<button type="button" class="btn btn-plain" data-final-clear>Undo final</button>' : ""}
+    </div>
+  </div>`;
+}
+function tripCalItems(event) {
+  const url = `${location.origin}/e/${event.id}`;
+  return dateRuns(event.final.dates).map((r) => ({ title: event.title, details: event.description || "Planned with Wingman", url, allDay: r }));
+}
+function bindFinalTrip(event) {
+  const card = $("#finalCard");
+  if (!card) return;
+  const items = tripCalItems(event);
+  const g = card.querySelector("[data-final-google]");
+  if (g) g.href = googleCalUrl(items[0]);
+  if (items.length > 1 && g) g.textContent = "Google Calendar (first days)";
+  card.querySelector("[data-final-ics]").addEventListener("click", () => downloadIcs(event.title, items));
+  card.querySelector("[data-final-clear]")?.addEventListener("click", async () => {
+    if (!confirm("Undo the final date? Everyone will see the group’s calendar again.")) return;
+    try {
+      await api(`/events/${event.id}`, { method: "PATCH", body: { final: null } });
+      toast("The final date was removed");
+      await renderEvent(event.id, { keepTab: true, quiet: true });
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
+}
+async function setFinalDates(dates) {
+  const event = current.event;
+  try {
+    await api(`/events/${event.id}`, { method: "PATCH", body: { final: { dates } } });
+    exitSelectMode();
+    toast(dates.length === 1 ? "Final date set — everyone can see it" : "Final dates set — everyone can see them");
+    buzz([15, 60, 15]);
+    await renderEvent(event.id, { keepTab: true, quiet: true });
+    window.scrollTo({ top: 0, behavior: reducedMotion() ? "auto" : "smooth" });
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
 }
 
 /** The response saved from this device for the current event, if any. */
