@@ -3,8 +3,9 @@
 // - App shell (page, script, styles): network first — usually a quick "not changed" check — and
 //   the saved copy if the network is slow (over 2.5 s) or offline.
 // - Everything under /api (events, responses, votes): always straight to the network, never cached.
-const SHELL = "wingman-shell-v28";
-const SHELL_FILES = ["/", "/app.js", "/styles.css", "/meet.js"];
+const SHELL = "wingman-shell-v29";
+// Saved under their full address (with ?v=), so a new page never gets an older script or stylesheet.
+const SHELL_FILES = ["/"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
@@ -43,5 +44,5 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== location.origin) return;
   if (url.pathname.startsWith("/api/")) return; // live data: never cached
   if (req.mode === "navigate") return e.respondWith(fromShell(req, "/")); // every app route is index.html
-  if (url.pathname === "/app.js" || url.pathname === "/styles.css" || url.pathname === "/meet.js") return e.respondWith(fromShell(req, url.pathname));
+  if (url.pathname === "/app.js" || url.pathname === "/styles.css" || url.pathname === "/meet.js") return e.respondWith(fromShell(req, url.pathname + url.search));
 });
