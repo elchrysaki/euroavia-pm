@@ -2270,3 +2270,31 @@ body:has(.flow) #app, body:has(.flow) .topbar, body:has(.flow) .action-bar { vis
 .cal-menu .cal-opt b { font-size: 1.0625rem; }
 .cal-menu .cal-ico { width: 48px; height: 48px; border-radius: 14px; font-size: 1.25rem; }
 .cal-ico.o { background: #0078d4; }
+
+/* ---- Who responded: back to the open look (label + names on the background, no box), but it folds ---- */
+.people-fold { background: transparent !important; border: 0 !important; box-shadow: none !important; margin-top: 1.25rem; }
+.people-fold > summary { padding: 0.5rem 0.25rem; min-height: 2.75rem; border-radius: 12px; font-size: 0.875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--label-2); }
+.people-fold > summary > span:first-child { white-space: nowrap; }
+.people-fold > summary small { font-size: 0.875rem; letter-spacing: 0; text-transform: none; }
+.people-fold[open] .fold-faces { display: inline-flex; }
+.people-fold > :not(summary) { margin-left: 0; margin-right: 0; }
+.people-fold .fold-note { margin: 0 0.25rem 0.375rem; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.people-fold .people-chips { max-height: none; overflow: visible; }
+
+/* ---- Softer boxes in dark mode: see-through blue, closer to the background, not black ---- */
+@media (prefers-color-scheme: dark) {
+  :root { --flat-card: rgba(28, 56, 110, 0.38); --flat-line: rgba(170, 205, 255, 0.16); --flat-fill: rgba(140, 185, 255, 0.12); }
+  .card, .faceplate { -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); }
+  html[data-perf="lite"] .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(22, 44, 88, 0.72) !important; }
+}
+/* the folded boxes in the left column are lighter too */
+.event-aside .fold:not(.people-fold), .event-aside .changelog { background: color-mix(in srgb, var(--flat-card) 70%, transparent) !important; }
+.people-fold { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.people-fold[open] > summary { background: none; }
+/* the open part of a <details> is its own box in newer browsers: keep Who responded see-through */
+.people-fold, .people-fold::details-content { background: none !important; background-color: transparent !important; }
+/* smooth mode (lite) gives cards a solid fill; Who responded stays see-through there too */
+html[data-perf] .people-fold, html[data-perf] .people-fold::details-content { background: none !important; }
+/* smooth mode cards: the same see-through blue as full mode, just without the blur */
+@media (prefers-color-scheme: dark) { html[data-perf="lite"] .card { background: rgba(28, 56, 110, 0.5) !important; } }
+html[data-perf] .card.people-fold, html[data-perf] details.people-fold { background: none !important; }
