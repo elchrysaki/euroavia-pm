@@ -12,7 +12,7 @@ A EUROAVIA no-login group planner for phone, tablet and desktop, laid out like B
 
 ## Trip days
 
-1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or a **custom** start and end date (up to two years, with shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
+1. **Create an event.** Give it a name, optional notes and the dates people can pick from: the next **3 months**, **6 months** or **1 year**, or any range up to two years on an Apple-style calendar (tap the first day, then the last; the range shows as one band between two filled circles; ‹ › or a swipe changes the month; tap **Starts** or **Ends** to change just that day; shortcuts for the rest of this year or all of next year). You get a personal link to share. An event can't be edited or deleted once it's created.
 2. **Share the link.** Each person goes through a short flow (Back sits next to Continue; the last step submits, no separate review screen):
    - enters their name
    - marks days on the event's calendar: **dark blue** for *definitely*, **light blue** for *maybe*. Tap a day, or press and drag to mark the whole rectangle between two days, like the meeting times grid (on touch, hold a day first). Their days then show on a calendar.

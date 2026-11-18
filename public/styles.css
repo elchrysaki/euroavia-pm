@@ -2061,3 +2061,77 @@ body:has(.flow) #app, body:has(.flow) .topbar, body:has(.flow) .action-bar { vis
 .person-remove svg { width: 18px; height: 18px; }
 .person-remove:hover, .person-remove:focus-visible { background: color-mix(in srgb, #e5484d 14%, transparent); color: #d93036; }
 .best-list[hidden] { display: none !important; }
+
+/* =====================================================================
+   Apple-style date range picker (trip create): Starts / Ends tiles, one month with ‹ ›,
+   round days, and the range as one continuous band between two filled circles.
+   ===================================================================== */
+.rp-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; margin: 0.875rem 0 0.75rem; }
+.rp-field { display: grid; gap: 0.125rem; text-align: left; padding: 0.75rem 1rem; border-radius: 14px; border: 1.5px solid transparent; background: var(--flat-fill); color: var(--label); font: inherit; cursor: pointer; transition: border-color .2s, background-color .2s; }
+.rp-field span { font-size: 0.875rem; font-weight: 600; color: var(--label-2); }
+.rp-field b { font-size: 1.0625rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-field[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.rp-field[aria-pressed="true"] b { color: var(--accent); }
+.rangepick { border-radius: 18px; padding: 0.75rem 0.75rem 0.5rem; background: rgba(255, 255, 255, 0.55); box-shadow: inset 0 0 0 1px var(--flat-line); touch-action: pan-y; }
+@media (prefers-color-scheme: dark) { .rangepick { background: rgba(255, 255, 255, 0.04); } }
+.rp-head { display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.25rem 0.5rem 0.5rem; }
+.rp-head h3 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+.rp-nav { display: flex; gap: 0.25rem; }
+.rp-arrow { width: 2.75rem; height: 2.75rem; border: 0; border-radius: 50%; background: transparent; color: var(--accent); display: grid; place-items: center; cursor: pointer; }
+.rp-arrow svg { width: 22px; height: 22px; }
+.rp-arrow:hover:not(:disabled) { background: var(--flat-fill); }
+.rp-arrow:disabled { color: var(--label-3); opacity: .5; cursor: default; }
+.rp-week, .rp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.rp-week span { text-align: center; font-size: 0.8125rem; font-weight: 600; color: var(--label-3); padding: 0.25rem 0 0.375rem; text-transform: uppercase; }
+.rp-day { position: relative; height: 2.875rem; border: 0; padding: 0; background: none; display: grid; place-items: center; font: inherit; color: var(--label); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.rp-day.blank { pointer-events: none; }
+.rp-day span { position: relative; z-index: 1; width: 2.625rem; height: 2.625rem; border-radius: 50%; display: grid; place-items: center; font-size: 1.0625rem; font-variant-numeric: tabular-nums; transition: background-color .15s, color .15s, transform .15s var(--ease); }
+@media (hover: hover) { .rp-day:not(.off):not(.start):not(.end):hover span { background: var(--flat-fill-hover); } }
+.rp-day:active:not(.off) span { transform: scale(.92); }
+.rp-day.today span { color: var(--accent); font-weight: 700; }
+.rp-day.off { color: var(--label-3); cursor: default; }
+.rp-day.off span { opacity: .55; }
+/* the band that joins first and last day */
+.rp-day.band::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.625rem; transform: translateY(-50%); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.rp-day.band.start::before { left: 50%; }
+.rp-day.band.end::before { right: 50%; }
+.rp-day.band.start.end::before { display: none; }
+.rp-day.band.edge-l:not(.start)::before { left: 4px; border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.rp-day.band.edge-r:not(.end)::before { right: 4px; border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.rp-day.in span { font-weight: 600; color: var(--label); }
+.rp-day.start span, .rp-day.end span { background: var(--accent); color: #fff; font-weight: 700; }
+.rp-hint { margin: 0.25rem 0.5rem 0.375rem; font-size: 0.9375rem; color: var(--label-2); text-align: center; }
+.rp-quick { margin-top: 0.75rem; }
+.rp-quick .btn { min-height: 2.5rem; font-size: 0.9375rem; }
+@media (prefers-reduced-motion: reduce) { .rp-day span { transition: none; } }
+
+/* ---- Meeting create calendar: the same round days; picked days run together as one band in a week ---- */
+.mc-scroll .day { aspect-ratio: auto !important; height: 2.875rem !important; background: none !important; box-shadow: none !important; border-radius: 0 !important; position: relative; font-size: 1.0625rem !important; color: var(--label); }
+.mc-scroll .day::after { content: ""; position: absolute; z-index: -1; top: 50%; left: 50%; width: 2.625rem; height: 2.625rem; transform: translate(-50%, -50%); border-radius: 50%; transition: background-color .15s; }
+.mc-scroll { isolation: isolate; }
+@media (hover: hover) { .mc-scroll .day:not(.past):not(.yes):hover::after { background: var(--flat-fill-hover); } }
+.mc-scroll .day.past { color: var(--label-3) !important; opacity: .6; }
+.mc-scroll .day.today:not(.yes) { color: var(--accent); font-weight: 700; }
+.mc-scroll .day.yes { color: #fff !important; font-weight: 700; background: none !important; }
+.mc-scroll .day.yes::after { background: var(--accent); }
+.mc-scroll .day.yes.join-l::before, .mc-scroll .day.yes.join-r::before { content: ""; position: absolute; z-index: -2; top: 50%; height: 2.625rem; transform: translateY(-50%); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.mc-scroll .day.yes.join-l::before { left: -3px; right: 50%; }
+.mc-scroll .day.yes.join-r::before { right: -3px; left: 50%; }
+.mc-scroll .day.yes.join-l.join-r::before { left: -3px; right: -3px; }
+.mc-scroll .day.ranging::after, .mc-scroll .day.pressing::after { box-shadow: 0 0 0 2.5px var(--accent); }
+.mc-scroll .day.first { font-size: 0.875rem !important; }
+.mc-scroll .mc-weekrow { margin-bottom: 0; column-gap: 0; }
+.mc-scroll .day.today::after { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
+.mc-scroll .day.today.yes::after { box-shadow: none; }
+
+/* Meeting create calendar, Apple style: circles sized to the cell (never overlapping), no grey squares */
+#mcScroll { container-type: inline-size; --dsz: min(2.625rem, calc((100cqw - 1.75rem) / 7 - 4px)); }
+#mcScroll .day { background: none !important; box-shadow: none !important; height: calc(var(--dsz) + 6px) !important; }
+#mcScroll .day::after { width: var(--dsz); height: var(--dsz); }
+#mcScroll .day.yes.join-l::before, #mcScroll .day.yes.join-r::before { height: var(--dsz); }
+#mcScroll .day.first { font-size: 1.0625rem !important; color: inherit; }
+#mcScroll .day.past { background: none !important; }
+#mcScroll .mc-weekrow { column-gap: 0 !important; }
+#mcScroll .day.yes.join-l::before { left: 0; }
+#mcScroll .day.yes.join-r::before { right: 0; }
+#mcScroll .day.yes.join-l.join-r::before { left: 0; right: 0; }

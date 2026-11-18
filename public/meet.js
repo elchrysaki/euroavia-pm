@@ -102,7 +102,7 @@ export function renderMeetCreate() {
       .map((date) => {
         const ok = open(date);
         const n = Number(date.slice(8));
-        const label = n === 1 ? `${MONTHS[Number(date.slice(5, 7)) - 1].slice(0, 3)} 1` : n;
+        const label = n; // the month name sits above each month, like Apple Calendar
         return `<button type="button" class="day${ok ? "" : " past"}${date === today ? " today" : ""}${n === 1 ? " first" : ""}" data-date="${date}" ${ok ? "" : "disabled"} aria-label="${esc(fmtShort(date))}">${label}</button>`;
       })
       .join("")}</div>`;
@@ -164,6 +164,14 @@ export function renderMeetCreate() {
   const allDays = () => $$(".day[data-date]:not([disabled])", scroller);
   const sync = () => {
     allDays().forEach((el) => el.classList.toggle("yes", st.yes.has(el.dataset.date)));
+    // picked days next to each other in a week run together as one band (Apple Calendar style)
+    allDays().forEach((el) => {
+      const on = el.classList.contains("yes");
+      const prev = el.previousElementSibling;
+      const next = el.nextElementSibling;
+      el.classList.toggle("join-l", on && !!prev?.classList.contains("yes"));
+      el.classList.toggle("join-r", on && !!next?.classList.contains("yes"));
+    });
     changed();
   };
   const changed = () => {

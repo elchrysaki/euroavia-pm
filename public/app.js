@@ -288,6 +288,12 @@ function addMonths(dateStr, n) {
   return toStr(target);
 }
 const daysInRange = (a, b) => Math.round((parseDate(b) - parseDate(a)) / 86_400_000) + 1;
+/** The date n days after dateStr. */
+function addDays(dateStr, n) {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + n);
+  return toStr(d);
+}
 function fmtRange(a, b) {
   const sameYear = a.slice(0, 4) === b.slice(0, 4);
   const left = fmtDate(a, sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
@@ -1240,15 +1246,25 @@ function renderHome() {
             <button type="button" data-value="12" aria-pressed="false">1 year</button>
             <button type="button" data-value="custom" aria-pressed="false">Custom</button>
           </div>
-          <div class="range-custom" id="rangeCustom" hidden>
-            <div class="group well" style="margin-top:0.625rem">
-              <div class="row"><label for="startDate">Starts</label><input type="date" id="startDate" min="${today}" value="${today}" /></div>
-              <div class="row"><label for="endDate">Ends</label><input type="date" id="endDate" min="${today}" value="${addMonths(today, 6)}" /></div>
+          <div class="rp-fields" role="group" aria-label="Start and end">
+            <button type="button" class="rp-field" data-edit="start" aria-pressed="false"><span>Starts</span><b id="rpStart"></b></button>
+            <button type="button" class="rp-field" data-edit="end" aria-pressed="false"><span>Ends</span><b id="rpEnd"></b></button>
+          </div>
+          <div class="rangepick" id="rangePick">
+            <div class="rp-head">
+              <h3 id="rpMonth" aria-live="polite"></h3>
+              <div class="rp-nav">
+                <button type="button" class="rp-arrow" data-step="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+                <button type="button" class="rp-arrow" data-step="1" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+              </div>
             </div>
-            <div class="chips" style="margin-top:0.625rem">
-              <button type="button" class="btn btn-tinted" data-whole="${nextYear - 1}">Rest of ${nextYear - 1}</button>
-              <button type="button" class="btn btn-tinted" data-whole="${nextYear}">All of ${nextYear}</button>
-            </div>
+            <div class="rp-week" aria-hidden="true">${["M", "T", "W", "T", "F", "S", "S"].map((d) => `<span>${d}</span>`).join("")}</div>
+            <div class="rp-grid" id="rpGrid" role="grid" aria-label="Choose the first and last day"></div>
+            <p class="rp-hint" id="rpHint"></p>
+          </div>
+          <div class="chips rp-quick">
+            <button type="button" class="btn btn-tinted" data-whole="${nextYear - 1}">Rest of ${nextYear - 1}</button>
+            <button type="button" class="btn btn-tinted" data-whole="${nextYear}">All of ${nextYear}</button>
           </div>
           <p class="range-summary" id="rangeSummary"></p>
           <div class="section-header">Also ask about</div>
@@ -1279,42 +1295,146 @@ function renderHome() {
   `;
 
   const form = $("#createForm");
-  const startIn = $("#startDate");
-  const endIn = $("#endDate");
-  const custom = $("#rangeCustom");
   const summary = $("#rangeSummary");
-  let preset = "6";
-  const currentRange = () =>
-    preset === "custom" ? { start: startIn.value, end: endIn.value } : { start: today, end: addMonths(today, Number(preset)) };
+  // An Apple-style range calendar (like Calendar / Booking pickers): one month at a time; tap the first
+  // day, then the last. The range is one continuous band between two filled circles. The presets
+  // (3 / 6 months, 1 year) fill it in; any tap on the calendar makes it Custom.
+  const rp = { start: today, end: addMonths(today, 6), picking: "start", month: today.slice(0, 7) };
+  const seg = $('[data-seg="range"]');
+  const MAX_DAYS = 731;
+  const lastAllowed = () => (rp.picking === "end" && rp.start ? addDays(rp.start, MAX_DAYS - 1) : addDays(today, MAX_DAYS * 2));
+  const currentRange = () => ({ start: rp.start, end: rp.end });
+  // mark a preset as chosen without triggering it (the slider moves to it)
+  const pressPreset = (v) => {
+    const buttons = [...seg.querySelectorAll("button")];
+    buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === v)));
+    const on = buttons.find((b) => b.dataset.value === v);
+    const thumb = seg.querySelector(".thumb");
+    if (on && thumb) {
+      thumb.style.width = `${on.offsetWidth}px`;
+      thumb.style.transform = `translateX(${on.offsetLeft - 2}px)`;
+    }
+  };
+  const fmtField = (d) => (d ? parseDate(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "Choose");
+  const drawRange = () => {
+    const [y, m] = rp.month.split("-").map(Number);
+    $("#rpMonth").textContent = `${MONTHS[m - 1]} ${y}`;
+    const first = new Date(y, m - 1, 1);
+    const offset = (first.getDay() + 6) % 7;
+    const n = new Date(y, m, 0).getDate();
+    const max = lastAllowed();
+    let html = "";
+    for (let i = 0; i < offset; i++) html += '<span class="rp-day blank"></span>';
+    for (let d = 1; d <= n; d++) {
+      const date = ymd(y, m - 1, d);
+      const col = (offset + d - 1) % 7;
+      const off = date < today || date > max;
+      const isStart = date === rp.start;
+      const isEnd = date === rp.end;
+      const inside = rp.start && rp.end && date > rp.start && date < rp.end;
+      const band = rp.start && rp.end && rp.end > rp.start && (inside || isStart || isEnd);
+      const cls = [
+        "rp-day",
+        off ? "off" : "",
+        date === today ? "today" : "",
+        isStart ? "start" : "",
+        isEnd ? "end" : "",
+        inside ? "in" : "",
+        band ? "band" : "",
+        band && (col === 0 || d === 1) ? "edge-l" : "",
+        band && (col === 6 || d === n) ? "edge-r" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      html += `<button type="button" class="${cls}" data-date="${date}" ${off ? "disabled" : ""} aria-pressed="${isStart || isEnd}" aria-label="${esc(
+        parseDate(date).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      )}${isStart ? ", first day" : isEnd ? ", last day" : inside ? ", in range" : ""}"><span>${d}</span></button>`;
+    }
+    $("#rpGrid").innerHTML = html;
+    $('[data-step="-1"]').disabled = rp.month <= today.slice(0, 7);
+    $("#rpStart").textContent = fmtField(rp.start);
+    $("#rpEnd").textContent = fmtField(rp.end);
+    $$(".rp-field").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.edit === rp.picking)));
+    $("#rpHint").textContent = rp.picking === "start" ? "Tap the first day people can choose." : "Now tap the last day.";
+    updateSummary();
+  };
   const updateSummary = () => {
     const r = currentRange();
     const ok = r.start && r.end && r.end >= r.start;
     summary.classList.toggle("error", !ok);
     summary.innerHTML = ok
       ? `${icon("calendar")}<span><b>${esc(fmtRange(r.start, r.end))}</b> · ${daysInRange(r.start, r.end)} days</span>`
-      : `${icon("calendar")}<span>The end date must be after the start date.</span>`;
+      : `${icon("calendar")}<span>${r.start ? "Pick the last day to finish the range." : "Pick the first day."}</span>`;
   };
-  setupSegmented($('[data-seg="range"]'), (v) => {
-    preset = v;
-    custom.hidden = v !== "custom";
-    updateSummary();
+  const showMonth = (date) => {
+    rp.month = (date || today).slice(0, 7);
+  };
+  setupSegmented(seg, (v) => {
+    if (v === "custom") {
+      rp.picking = "start";
+      rp.end = null;
+      showMonth(rp.start);
+    } else {
+      rp.start = today;
+      rp.end = addMonths(today, Number(v));
+      rp.picking = "start";
+      showMonth(today);
+    }
+    drawRange();
   });
-  startIn.addEventListener("input", () => {
-    endIn.min = startIn.value || today;
-    if (endIn.value && endIn.value < startIn.value) endIn.value = addMonths(startIn.value, 1);
-    updateSummary();
+  $("#rpGrid").addEventListener("click", (e) => {
+    const b = e.target.closest(".rp-day[data-date]");
+    if (!b || b.disabled) return;
+    const d = b.dataset.date;
+    if (rp.picking === "start" || !rp.start || d < rp.start) {
+      rp.start = d; // a new first day; the last day comes next
+      rp.end = null;
+      rp.picking = "end";
+    } else {
+      rp.end = d;
+      rp.picking = "start";
+      buzz(8);
+    }
+    pressPreset("custom");
+    drawRange();
   });
-  endIn.addEventListener("input", updateSummary);
-  custom.addEventListener("click", (e) => {
+  $$(".rp-arrow").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [y, m] = rp.month.split("-").map(Number);
+      const d = new Date(y, m - 1 + Number(b.dataset.step), 1);
+      rp.month = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+      drawRange();
+    }),
+  );
+  $$(".rp-field").forEach((b) =>
+    b.addEventListener("click", () => {
+      rp.picking = b.dataset.edit;
+      showMonth(rp.picking === "end" ? rp.end || rp.start : rp.start);
+      drawRange();
+    }),
+  );
+  // swipe left / right on the month to change it
+  let swipe = null;
+  $("#rangePick").addEventListener("pointerdown", (e) => (swipe = { x: e.clientX, y: e.clientY }));
+  $("#rangePick").addEventListener("pointerup", (e) => {
+    if (!swipe) return;
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    swipe = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) $(`.rp-arrow[data-step="${dx < 0 ? 1 : -1}"]`)?.click();
+  });
+  $(".rp-quick").addEventListener("click", (e) => {
     const b = e.target.closest("[data-whole]");
     if (!b) return;
     const y = b.dataset.whole;
-    startIn.value = `${y}-01-01` < today ? today : `${y}-01-01`;
-    endIn.value = `${y}-12-31`;
-    endIn.min = startIn.value;
-    updateSummary();
+    rp.start = `${y}-01-01` < today ? today : `${y}-01-01`;
+    rp.end = `${y}-12-31`;
+    rp.picking = "start";
+    pressPreset("custom");
+    showMonth(rp.start);
+    drawRange();
   });
-  updateSummary();
+  drawRange();
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("#createBtn");
@@ -1324,7 +1444,7 @@ function renderHome() {
       return toast("Give your event a name", { error: true });
     }
     const range = currentRange();
-    if (!range.start || !range.end || range.end < range.start) return toast("The end date must be after the start date.", { error: true });
+    if (!range.start || !range.end || range.end < range.start) return toast("Pick the first and the last day on the calendar.", { error: true });
     if (daysInRange(range.start, range.end) > 731) return toast("Pick a range of up to two years", { error: true });
     btn.disabled = true;
     try {
